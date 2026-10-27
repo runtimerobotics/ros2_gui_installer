@@ -39,6 +39,8 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 The installer opens by itself. Press **Next**, tick what you want, then press **Install**.
 Later, open **ROS 2 Installer** from your app menu. More options are under [Install](#install).
 
+## Supported systems
+
 | Ubuntu | ROS 2 |
 |---|---|
 | 22.04 | Humble |

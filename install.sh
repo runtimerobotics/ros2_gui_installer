@@ -1,7 +1,9 @@
 #!/bin/bash
 # Installs (or updates) the ROS 2 GUI Installer for the current user, then opens it:
 #   curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | bash
-# Set NO_LAUNCH=1 to skip opening the app at the end.
+# Set NO_LAUNCH=1 to skip opening the app at the end. Set PROFILE=<url or file> to open it with a
+# workshop profile, so a whole lab gets the same choices:
+#   curl -fsSL .../install.sh | PROFILE=https://example.org/nav2-course.yaml bash
 set -euo pipefail
 
 # Everything lives in main() so bash reads the whole script before running it;
@@ -65,7 +67,11 @@ EOF
 
   echo "Done. Open \"ROS 2 Installer\" from your app menu, or run: $bin"
   if [ -z "${NO_LAUNCH:-}" ] && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
-    nohup "$bin" >/dev/null 2>&1 &
+    if [ -n "${PROFILE:-}" ]; then
+      nohup "$bin" --profile "$PROFILE" >/dev/null 2>&1 &
+    else
+      nohup "$bin" >/dev/null 2>&1 &
+    fi
   fi
 }
 

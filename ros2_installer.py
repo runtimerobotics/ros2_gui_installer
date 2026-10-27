@@ -26,11 +26,12 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.9"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.2.0"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
 MIN_RAM_GB = 4  # below this Gazebo and RViz struggle
+PROFILE_SOURCE = None  # --profile URL or file, set by main()
 LOG_DIR = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "ros2-gui-installer"
 ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
 ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
@@ -274,6 +275,68 @@ def save_log(text):
     return path
 
 
+PROFILE_KEYS = {"name", "description", "ros", "categories", "packages", "network", "terminal"}
+PROFILE_PACKAGE = re.compile(r"^ros-(\{distro\}|humble|jazzy|lyrical)-[a-z0-9][a-z0-9-]*$")
+PROFILE_MAX_BYTES = 64 * 1024
+
+
+def load_profile(text):
+    """A workshop profile (YAML) checked against the catalog. Raises ValueError with a plain reason.
+    Profiles can come from any URL, so only known settings and ROS 2 package names get through."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as e:
+        hint = ". Put names with {distro} in quotes, or list one per line" if "{distro}" in text else ""
+        raise ValueError(f"it isn't valid YAML ({getattr(e, 'problem', e)}){hint}") from None
+    if not isinstance(data, dict):
+        raise ValueError("it should be settings like name: and categories:")
+    if set(data) - PROFILE_KEYS:
+        raise ValueError(f"unknown setting: {', '.join(sorted(map(str, set(data) - PROFILE_KEYS)))}")
+    name = data.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError("it needs a name:")
+    default = next(k for k, v in CATALOG["base"]["variants"].items() if v.get("default"))
+    ros = data.get("ros", default)
+    if ros not in CATALOG["base"]["variants"]:
+        raise ValueError(f"ros: must be one of {', '.join(CATALOG['base']['variants'])}")
+    categories = data.get("categories", [])
+    known = {c["id"] for c in CATALOG["categories"]}
+    if not isinstance(categories, list) or not set(map(str, categories)) <= known:
+        raise ValueError(f"categories: must be a list of {', '.join(sorted(known))}")
+    packages = data.get("packages", [])
+    if not isinstance(packages, list) or not all(isinstance(p, str) and PROFILE_PACKAGE.match(p) for p in packages):
+        raise ValueError("packages: must be a list of ROS 2 package names like ros-{distro}-joy")
+    network = data.get("network", {})
+    rmw_ids = [o["id"] for o in CATALOG["network"]["rmw"]]
+    if not isinstance(network, dict) or set(network) - {"domain_id", "rmw", "localhost"}:
+        raise ValueError("network: can only set domain_id, rmw and localhost")
+    domain = network.get("domain_id", 0)
+    if type(domain) is not int or not 0 <= domain <= 101:
+        raise ValueError("network: domain_id must be a whole number from 0 to 101")
+    if network.get("rmw", "default") not in rmw_ids:
+        raise ValueError(f"network: rmw must be one of {', '.join(rmw_ids)}")
+    if type(network.get("localhost", False)) is not bool or type(data.get("terminal", True)) is not bool:
+        raise ValueError("network: localhost and terminal: must be true or false")
+    return {"name": name.strip(), "description": str(data.get("description", "")).strip(), "ros": ros,
+            "categories": categories, "packages": packages, "network": network,
+            "terminal": data.get("terminal", True)}
+
+
+def fetch_profile(source):
+    """The text of a profile from an http(s) URL or a file path. Raises ValueError with a plain reason."""
+    try:
+        if source.startswith(("https://", "http://")):
+            with urllib.request.urlopen(source, timeout=10) as response:
+                raw = response.read(PROFILE_MAX_BYTES + 1)
+        else:
+            raw = Path(source).expanduser().read_bytes()
+    except OSError as e:
+        raise ValueError(f"couldn't read it ({getattr(e, 'reason', None) or e.strerror or e})") from None
+    if len(raw) > PROFILE_MAX_BYTES:
+        raise ValueError("it's too big for a profile (over 64 KB)")
+    return raw.decode("utf-8", errors="replace")
+
+
 def network_env(distro, domain_id, rmw, localhost):
     """Environment variables for the network settings; defaults are left unset."""
     env = {}
@@ -449,6 +512,14 @@ class Installer(Adw.ApplicationWindow):
         if self.distro:
             self.build_choose_page()
         self.show_page("check")
+        if PROFILE_SOURCE:
+            def load():
+                try:
+                    result = load_profile(fetch_profile(PROFILE_SOURCE))
+                except ValueError as e:
+                    result = str(e)
+                GLib.idle_add(self.apply_profile, result)
+            threading.Thread(target=load, daemon=True).start()
 
     def on_close_request(self, _window):
         """Closing mid-install would cut apt off (its output pipe closes) and can leave dpkg half done."""
@@ -528,10 +599,12 @@ class Installer(Adw.ApplicationWindow):
                                      description="ROS 2 needs a supported Ubuntu version, free disk space and internet.")
         page.add(group)
         self.check_rows = {}
-        for key, title in [("os", "Ubuntu version"), ("arch", "Processor type"), ("computer", "Computer"),
-                           ("gpu", "Graphics"), ("disk", "Free disk space"),
-                           ("net", "Internet connection"), ("agent", "Password prompt"),
-                           ("ros", "ROS 2 already on this computer")]:
+        rows = [("os", "Ubuntu version"), ("arch", "Processor type"), ("computer", "Computer"),
+                ("gpu", "Graphics"), ("disk", "Free disk space"), ("net", "Internet connection"),
+                ("agent", "Password prompt"), ("ros", "ROS 2 already on this computer")]
+        if PROFILE_SOURCE:
+            rows.append(("profile", "Workshop profile"))
+        for key, title in rows:
             row = Adw.ActionRow(title=title, subtitle="Checking…")
             group.add(row)
             self.check_rows[key] = [row, None]
@@ -646,6 +719,8 @@ class Installer(Adw.ApplicationWindow):
         avail = parse_policy(run(["apt-cache", "policy", *everything])) if repo_configured() else None
 
         page = Adw.PreferencesPage()
+        self.profile_group = Adw.PreferencesGroup(visible=False)  # filled in by apply_profile
+        page.add(self.profile_group)
         self.updates = []
         if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
             page.add(self.build_updates_group())
@@ -722,6 +797,52 @@ class Installer(Adw.ApplicationWindow):
         extra.add(self.manual_row)
         page.add(extra)
         self.replace_page("choose", page)
+
+    def apply_profile(self, profile):
+        """Fill in the choose page from a workshop profile (a dict), or report why it couldn't load (a str).
+        Students still review and approve with their password; nothing installs by itself."""
+        if isinstance(profile, str):
+            self.set_check("profile", "warn", f"Couldn't use the workshop profile: {profile}. "
+                                              "You can still choose by hand.")
+            return
+        self.set_check("profile", "ok", f"{profile['name']}: your choices are filled in on the next page")
+        if not self.distro:
+            return
+        d, notes = self.distro, []
+        self.variant_checks[profile["ros"]].set_active(True)
+        titles = {c["id"]: c["title"] for c in CATALOG["categories"]}
+        for cat in profile["categories"]:
+            check = self.cat_checks[cat]
+            if check.get_sensitive():
+                check.set_active(True)
+            elif not any(g["id"] in self.usable for g in self.cat_members[cat]):
+                notes.append(f"{titles[cat]} isn't available for ROS 2 {d.title()}")
+        wanted = [p.format(distro=d) for p in profile["packages"]]
+        mine = [p for p in wanted if p.startswith(f"ros-{d}-")]
+        notes += [f"{p} is for another ROS 2 version" for p in wanted if p not in mine]
+        if mine and repo_configured():
+            avail = parse_policy(run(["apt-cache", "policy", *mine]))
+            notes += [f"{p} isn't available" for p in mine if p not in avail]
+            mine = [p for p in mine if p in avail]
+        self.manual |= set(mine)
+        if self.manual:
+            self.manual_row.set_subtitle(f"{len(self.manual)} picked")
+        net = profile["network"]
+        if net:
+            self.domain.set_value(net.get("domain_id", 0))
+            self.rmw.set_selected([o["id"] for o in self.rmw_options].index(net.get("rmw", "default")))
+            self.localhost.set_active(net.get("localhost", False))
+            self.advanced.set_expanded(True)  # so students can see what the profile set
+        if self.bashrc_check.get_sensitive():
+            self.bashrc_check.set_active(profile["terminal"])
+        text = " ".join(filter(None, [profile["description"], "Your choices are filled in; press Next to review."]))
+        if notes:
+            text += " Not applied: " + "; ".join(notes) + "."
+        row = Adw.ActionRow(title=GLib.markup_escape_text(f"Workshop profile: {profile['name']}"),
+                            subtitle=GLib.markup_escape_text(text))
+        row.add_prefix(decorative("emblem-documents-symbolic"))
+        self.profile_group.add(row)
+        self.profile_group.set_visible(True)
 
     def on_category_toggled(self, check, cat):
         """Ticking a category also ticks the categories its sections need (Nav2 needs Simulate)."""
@@ -816,7 +937,7 @@ class Installer(Adw.ApplicationWindow):
     def build_network_group(self, saved):
         group = Adw.PreferencesGroup(title="Network")
         # Folded away: a wrong value quietly stops a computer seeing its robot. Open if set before.
-        advanced = Adw.ExpanderRow(title="Advanced: network settings", expanded=bool(saved),
+        self.advanced = advanced = Adw.ExpanderRow(title="Advanced: network settings", expanded=bool(saved),
                                    subtitle="Leave these alone unless your teacher or lab says otherwise. "
                                             "Computers and robots only see each other when these match.")
         group.add(advanced)
@@ -1201,6 +1322,15 @@ def main():
     if "--version" in sys.argv:
         print(f"ROS 2 Installer {__version__}")
         return 0
+    global PROFILE_SOURCE
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
+        if arg == "--profile":
+            if i + 1 == len(args):
+                sys.exit("usage: ros2-gui-installer --profile URL-or-file")
+            PROFILE_SOURCE = args[i + 1]
+        elif arg.startswith("--profile="):
+            PROFILE_SOURCE = arg.split("=", 1)[1]
     if "--check-updates" in sys.argv:
         check_updates()
         return 0
@@ -1215,7 +1345,7 @@ def main():
         Gtk.Window.set_default_icon_name(APP_ID)
         Installer(a).present()
     app.connect("activate", activate)
-    return app.run(sys.argv)
+    return app.run(sys.argv[:1])  # our options are handled above; GTK has none to parse
 
 
 if __name__ == "__main__":

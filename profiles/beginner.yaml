@@ -1,0 +1,10 @@
+# Workshop profile: a first ROS 2 course. Students run:
+#   ros2-gui-installer --profile https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/beginner.yaml
+# Copy this file, change it for your course, and share its URL (any web server works).
+name: ROS 2 beginner course
+description: ROS 2 with the official tutorials and keyboard driving, for the first-steps lessons.
+ros: desktop-full            # desktop-full, desktop or ros-base
+categories:                  # ids from catalog.yaml: learn, simulate, models, tools, sensors, mobile, arms, behavior, connect, dev
+  - learn
+packages:                    # extra packages; {distro} becomes humble, jazzy or lyrical
+  - ros-{distro}-teleop-twist-keyboard

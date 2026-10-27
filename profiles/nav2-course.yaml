@@ -1,0 +1,13 @@
+# Workshop profile: a simulation-only Nav2 course, where each laptop keeps its ROS 2 traffic to itself.
+#   ros2-gui-installer --profile https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/nav2-course.yaml
+name: Nav2 course
+description: Simulation, TurtleBot and Nav2, ready for the navigation exercises.
+ros: desktop-full
+categories:
+  - learn
+  - simulate
+  - mobile
+network:
+  rmw: rmw_cyclonedds_cpp    # default, rmw_cyclonedds_cpp or rmw_zenoh_cpp
+  localhost: true            # this computer only: students' simulations don't see each other
+  # domain_id: 7             # instead of localhost: give each robot or student group its own number (0-101)

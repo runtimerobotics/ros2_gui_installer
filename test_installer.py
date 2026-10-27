@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, newer_release, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, fetch_profile, load_profile, newer_release, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -136,6 +136,41 @@ assert tutorials_url("lyrical") == "https://docs.ros.org/en/lyrical/First-Steps.
 pages = set(re.findall(r'show_page\("(\w+)"\)', open(ros2_installer.__file__).read()))
 assert pages <= set(ros2_installer.Installer.STEPS), pages - set(ros2_installer.Installer.STEPS)
 assert set(ros2_installer.Installer.STEPS.values()) == set(range(len(ros2_installer.Installer.STEP_NAMES)))
+
+# Workshop profiles: the good parts load, anything unexpected is refused with a plain reason.
+good = load_profile("name: Nav2 course\nros: desktop-full\ncategories: [learn, simulate, mobile]\n"
+                    "packages: ['ros-{distro}-joy']\nnetwork: {rmw: rmw_cyclonedds_cpp, localhost: true, domain_id: 7}\n")
+assert good["name"] == "Nav2 course" and good["categories"] == ["learn", "simulate", "mobile"]
+assert good["network"]["domain_id"] == 7 and good["terminal"] is True
+assert load_profile("name: Minimal\n")["ros"] == "desktop-full"  # the recommended option by default
+for bad, reason in [("- just a list", "settings like"), ("name: x\nrun: rm -rf /", "unknown setting"),
+                    ("ros: desktop", "needs a name"), ("name: x\nros: everything", "ros: must be"),
+                    ("name: x\ncategories: [flying]", "categories:"),
+                    ("name: x\npackages: [vim]", "packages:"), ("name: x\npackages: ['ros-jazzy-x; rm -rf ~']", "packages:"),
+                    ("name: x\nnetwork: {domain_id: 500}", "domain_id"), ("name: x\nnetwork: {domain_id: true}", "domain_id"),
+                    ("name: x\nnetwork: {rmw: telepathy}", "rmw must"), ("name: x\nnetwork: {proxy: evil}", "can only set"),
+                    ("name: x\nterminal: yes please", "true or false"), ("name: [unclosed", "valid YAML"),
+                    ("name: x\npackages: [ros-{distro}-joy]", "in quotes")]:
+    try:
+        load_profile(bad)
+        raise AssertionError(f"accepted a bad profile: {bad!r}")
+    except ValueError as e:
+        assert reason in str(e), (bad, str(e))
+with tempfile.TemporaryDirectory() as tmp:
+    big = Path(tmp) / "big.yaml"
+    big.write_text("name: big\n" + "# padding\n" * 10000)
+    for source, reason in [(str(big), "too big"), (str(Path(tmp) / "missing.yaml"), "couldn't read")]:
+        try:
+            fetch_profile(source)
+            raise AssertionError(source)
+        except ValueError as e:
+            assert reason in str(e), str(e)
+
+# The example profiles in profiles/ must always load.
+examples = sorted(Path(ros2_installer.HERE / "profiles").glob("*.yaml"))
+assert examples, "no example profiles"
+for example in examples:
+    load_profile(example.read_text())
 
 # Install logs are saved with a header naming the setup.
 with tempfile.TemporaryDirectory() as tmp:

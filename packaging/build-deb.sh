@@ -67,12 +67,16 @@ gzip -9n > "$share/man/man1/ros2-gui-installer.1.gz" <<MANPAGE
 ros2-gui-installer \- beginner-friendly installer for ROS 2
 .SH SYNOPSIS
 .B ros2-gui-installer
-[\fB\-\-version\fR | \fB\-\-check\-updates\fR]
+[\fB\-\-profile\fR \fIURL-or-file\fR | \fB\-\-version\fR | \fB\-\-check\-updates\fR]
 .SH DESCRIPTION
 Opens a window that checks the computer, lets you pick parts of ROS 2 to install
 (simulation, Nav2, MoveIt 2 and more), and installs them with one password prompt.
 Run it as your normal user, not with sudo.
 .SH OPTIONS
+.TP
+.BI \-\-profile " URL-or-file"
+Open with a workshop profile (YAML) that picks what to install and the network settings,
+so every computer in a class gets the same setup. Students still review and approve.
 .TP
 .B \-\-version
 Print the version and exit.

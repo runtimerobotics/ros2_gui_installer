@@ -165,6 +165,47 @@ Under **Network → Advanced: network settings** (folded away, because a wrong v
 The settings are saved to `~/.config/ros2-gui-installer/env.sh`, and `~/.bashrc` loads that file, so they apply to every new terminal.
 To change them, run the installer again; it starts from the values you saved last time.
 
+### Workshop profiles (same setup on every computer)
+
+A **workshop profile** is a small YAML file that picks what to install and the network settings for a class.
+Students open the installer with it, find everything already ticked, and only have to press **Next**, review, and enter their password.
+Nothing installs without them reviewing and approving it.
+
+```yaml
+name: Nav2 course
+description: Simulation, TurtleBot and Nav2, ready for the navigation exercises.
+ros: desktop-full            # desktop-full, desktop or ros-base
+categories:                  # learn, simulate, models, tools, sensors, mobile, arms, behavior, connect, dev
+  - learn
+  - simulate
+  - mobile
+packages:                    # optional extras; {distro} becomes humble, jazzy or lyrical
+  - ros-{distro}-teleop-twist-keyboard
+network:                     # optional
+  rmw: rmw_cyclonedds_cpp    # default, rmw_cyclonedds_cpp or rmw_zenoh_cpp
+  localhost: true            # this computer only
+  # domain_id: 7             # 0-101, instead of localhost
+terminal: true               # load ROS 2 in every new terminal
+```
+
+Put the file on any web server (or a USB stick), then on each computer run:
+
+```bash
+ros2-gui-installer --profile https://example.org/nav2-course.yaml
+```
+
+Or install the app and open the profile in one line, for a fresh lab machine:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | PROFILE=https://example.org/nav2-course.yaml bash
+```
+
+Ready-made examples are in [`profiles/`](profiles/), for example [`nav2-course.yaml`](profiles/nav2-course.yaml).
+The installer checks every profile strictly: only the settings above, only ROS 2 package names, and Domain IDs from 0 to 101.
+If something's wrong, the first page says what, and students can still choose by hand.
+Anything a computer can't use (for example a category not released for its ROS 2 version) is listed on the choose page.
+If you write package lists on one line, put names with `{distro}` in quotes: `['ros-{distro}-joy']`.
+
 ## Install
 
 Open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) and paste:
@@ -289,6 +330,7 @@ Check the **Graphics** row on the first page. Virtual machines and computers wit
 - `catalog.yaml` lists every section with its packages and demo command.
   To add a section, add an entry there; you don't need to change any code.
 - `ros2_installer.py` is the GUI. It runs as your normal user.
+- `profiles/` holds example workshop profiles; CI checks that they load.
 - `packaging/build-deb.sh` builds the `.deb`. When a GitHub release is published, a workflow builds it from that tag and attaches it to the release.
 - `helper.sh` is the only part that runs as root. It refuses any package name that isn't a ROS 2 package. If the ROS 2 apt repository is missing, it adds it using the official [`ros2-apt-source`](https://github.com/ros-infrastructure/ros-apt-source) package. Then it runs `apt-get install` for new packages, and `apt-get install --only-upgrade` for updates.
 - The ROS 2 version comes from `UBUNTU_CODENAME` in `/etc/os-release` (jammy → Humble, noble → Jazzy, resolute → Lyrical). That's why Ubuntu-based systems work too.

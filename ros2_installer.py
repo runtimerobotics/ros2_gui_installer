@@ -24,7 +24,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.7"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.8"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
@@ -576,7 +576,7 @@ class Installer(Adw.ApplicationWindow):
         if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
             page.add(self.build_updates_group())
         base = Adw.PreferencesGroup(title="ROS 2 itself",
-                                    description="New to ROS 2? Keep Desktop, tick Learn ROS 2 below, then press Next. "
+                                    description="New to ROS 2? Keep Desktop-Full, tick Learn ROS 2 below, then press Next. "
                                                 "You can add more later.")
         page.add(base)
         self.variant_checks = {}
@@ -1061,7 +1061,7 @@ class Installer(Adw.ApplicationWindow):
         # Every demo is listed; ones whose packages aren't installed are shown but can't be run.
         group = Adw.PreferencesGroup(title="Try a demo",
                                      description="Each one opens a terminal. Press Ctrl+C there to stop it.")
-        demos = [(m, expand(m.get("packages", []), d), "Comes with ROS 2 Desktop.") for m in CATALOG["base"]["demos"]]
+        demos = [(m, expand(m.get("packages", []), d), "Comes with ROS 2 Desktop and Desktop-Full.") for m in CATALOG["base"]["demos"]]
         cat_title = {c["id"]: c["title"] for c in CATALOG["categories"]}
         demos += [(g["demo"], expand(g["packages"], d),
                    f"Press Install more below and tick “{cat_title[g['category']]}”.")

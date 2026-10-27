@@ -15,19 +15,19 @@ distros:            # Ubuntu codename -> ROS 2 distro. Ubuntu-based systems (Min
   resolute: lyrical
 
 base:
-  variants:
-    desktop:
-      title: Desktop
-      description: Everything you need to learn ROS 2, with the RViz and rqt tools and the demos.
-      default: true
-      packages:
-        - ros-{distro}-desktop
-        - ros-dev-tools
+  variants:         # shown in this order; "default" is pre-selected and marked recommended
     desktop-full:
       title: Desktop-Full
-      description: Desktop plus the Gazebo simulator and camera/3D tools. A much bigger download.
+      description: Everything to learn ROS 2 and simulate robots, with the Gazebo simulator, RViz and rqt. The biggest download.
+      default: true
       packages:
         - ros-{distro}-desktop-full
+        - ros-dev-tools
+    desktop:
+      title: Desktop
+      description: ROS 2 with RViz, rqt and the demos, but no simulator. A smaller download if space or internet is tight.
+      packages:
+        - ros-{distro}-desktop
         - ros-dev-tools
     ros-base:
       title: ROS-Base
@@ -39,7 +39,7 @@ base:
     - title: Talker
       command: ros2 run demo_nodes_cpp talker
       packages:
-        - ros-{distro}-demo-nodes-cpp   # comes with Desktop, not with ROS-Base
+        - ros-{distro}-demo-nodes-cpp   # comes with Desktop and Desktop-Full, not with ROS-Base
     - title: Check that ROS 2 works
       command: ros2 doctor --report
 

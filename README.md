@@ -80,7 +80,7 @@ Optional:
 A step bar at the top always shows where you are and what comes next: **Check → Choose → Review → Install → Try it**.
 
 1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), your processor type, free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. It also shows your computer (processor, cores, memory) and graphics card, with the NVIDIA driver version if there is one. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
-2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
+2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop-Full (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
 3. **Review:** see what you picked, how many packages that means, and the download size.
 4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If Ubuntu is busy with its own updates (common on a new computer), the installer says so and waits. If something fails, you get a plain-English reason (another install running, no disk space, download interrupted) and a **Try again** button.
 5. **Try it:** a **What next?** box has an **Open terminal** button (a terminal with ROS 2 loaded), a **Run** button for your first ROS 2 program (turtlesim), and a button to the official beginner tutorials. Below it, every demo is listed, such as Gazebo, Nav2 or MoveIt 2. The ones you've installed have a working **Run** button that opens a terminal running the demo (it tells you to press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it); the others say **Not installed** and which category to tick to get them. **Install more** takes you back to pick more.
@@ -94,11 +94,11 @@ A step bar at the top always shows where you are and what comes next: **Check �
 | <img src="docs/screenshots/5-individual-packages.png" width="400" alt="Searching individual packages"><br>**Individual packages** | <img src="docs/screenshots/6-review.png" width="400" alt="Review with package count and download size"><br>**3. Review** |
 | <img src="docs/screenshots/7-install.png" width="400" alt="Install progress bar"><br>**4. Install** | <img src="docs/screenshots/8-try-it.png" width="400" alt="Last page: What next and demo buttons"><br>**5. Try it:** what next, and demos |
 
-Screenshots are from version 0.1.6 on a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
+Screenshots are from version 0.1.8 on a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
 
 ## What you can install
 
-First pick **ROS 2 itself**: **Desktop** (recommended), **Desktop-Full**, or **ROS-Base** (no graphical tools, for robots, servers, Raspberry Pi and Jetson), plus `ros-dev-tools` and `rosdep`.
+First pick **ROS 2 itself**: **Desktop-Full** (recommended: includes the Gazebo simulator), **Desktop** (no simulator, a smaller download), or **ROS-Base** (no graphical tools, for robots, servers, Raspberry Pi and Jetson), plus `ros-dev-tools` and `rosdep`.
 Then tick any of these categories. Each one installs all the sections in it:
 
 | Category | Section | Main packages |

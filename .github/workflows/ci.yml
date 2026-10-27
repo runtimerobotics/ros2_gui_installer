@@ -9,13 +9,14 @@ on:
 
 jobs:
   test:
-    name: Ubuntu ${{ matrix.ubuntu }}
-    runs-on: ubuntu-latest
+    name: Ubuntu ${{ matrix.ubuntu }} ${{ matrix.runner == 'ubuntu-24.04-arm' && 'arm64' || 'amd64' }}
+    runs-on: ${{ matrix.runner }}
     container: ubuntu:${{ matrix.ubuntu }}
     strategy:
       fail-fast: false
       matrix:
         ubuntu: ["22.04", "24.04", "26.04"]  # Humble, Jazzy, Lyrical
+        runner: [ubuntu-latest, ubuntu-24.04-arm]  # amd64 and real arm64 hardware
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:

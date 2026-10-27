@@ -2,10 +2,12 @@
 # Add a goal by adding an entry under "goals" -- no code changes needed.
 # A goal whose packages are not in the ROS apt repo for this distro is greyed out.
 # "packages" and "command" can be one value, or a map of {default: ..., humble: ...}
-# when a distro needs something different. "requires" ticks other goals too.
+# when a distro needs something different; "humble-arm64:" overrides one distro on one
+# architecture. A demo command of null means "no demo there". "requires" ticks other goals too.
 # "category" puts a goal in one of the collapsible groups listed under "categories".
 # "demo" is optional: leave it out when a section needs real hardware to show anything.
-# "not_released_for" lists distros where a goal is expected to be greyed out (checked by CI).
+# "not_released_for" lists distros (or distro-arch, like humble-arm64) where a goal is expected
+# to be greyed out (checked by CI).
 
 distros:            # Ubuntu codename -> ROS 2 distro. Ubuntu-based systems (Mint, Pop!_OS)
   jammy: humble     # report the Ubuntu codename they're built on as UBUNTU_CODENAME.
@@ -27,9 +29,19 @@ base:
       packages:
         - ros-{distro}-desktop-full
         - ros-dev-tools
-  demo:
-    title: Talker
-    command: ros2 run demo_nodes_cpp talker
+    ros-base:
+      title: ROS-Base
+      description: The core of ROS 2 with no graphical tools. For robots, servers, Raspberry Pi and Jetson.
+      packages:
+        - ros-{distro}-ros-base
+        - ros-dev-tools
+  demos:            # offered on the last page when their "packages" (if any) are installed
+    - title: Talker
+      command: ros2 run demo_nodes_cpp talker
+      packages:
+        - ros-{distro}-demo-nodes-cpp   # comes with Desktop, not with ROS-Base
+    - title: Check that ROS 2 works
+      command: ros2 doctor --report
 
 categories:         # shown in this order on the choose page
   - {id: learn, title: Learn ROS 2}
@@ -92,10 +104,14 @@ goals:
         - ros-{distro}-navigation2
         - ros-{distro}-nav2-bringup
         - ros-{distro}-turtlebot3-gazebo
+      humble-arm64:   # Gazebo Classic isn't built for arm64 (Jetson, Raspberry Pi): Nav2 without the demo world
+        - ros-{distro}-navigation2
+        - ros-{distro}-nav2-bringup
     demo:
       title: Nav2 with a simulated robot
       command:
         default: ros2 launch nav2_bringup tb4_simulation_launch.py headless:=False
+        humble-arm64: null
         humble: >-
           export TURTLEBOT3_MODEL=waffle
           GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:/opt/ros/humble/share/turtlebot3_gazebo/models &&
@@ -306,9 +322,13 @@ goals:
         - ros-{distro}-turtlebot3-simulations
       lyrical:  # only the simulation packages are released for Lyrical so far
         - ros-{distro}-turtlebot3-simulations
+      humble-arm64:  # no Gazebo Classic simulation on arm64; the real-robot packages are there
+        - ros-{distro}-turtlebot3
     demo:
       title: TurtleBot 3 in a Gazebo world
-      command: export TURTLEBOT3_MODEL=burger && ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+      command:
+        default: export TURTLEBOT3_MODEL=burger && ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+        humble-arm64: null
 
   - id: rtabmap
     category: mobile

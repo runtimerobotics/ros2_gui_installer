@@ -11,6 +11,7 @@
 <br>
 [![Desktops](https://img.shields.io/badge/desktop-GNOME%20%7C%20KDE%20%7C%20XFCE%20%7C%20MATE%20%7C%20Cinnamon%20%7C%20LXQt-555?logo=linux&logoColor=white)](#desktops-and-requirements)
 [![X11 | Wayland](https://img.shields.io/badge/display-X11%20%7C%20Wayland-555)](#desktops-and-requirements)
+[![amd64 | arm64](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-555)](#desktops-and-requirements)
 <br>
 [![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
 [![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/jazzy/)
@@ -59,7 +60,10 @@ It uses GTK4 and libadwaita, so it looks like a GNOME app everywhere but follows
 
 You need:
 
-- Ubuntu 22.04, 24.04 or 26.04 (any flavor), or a system based on one, on amd64 or arm64
+- Ubuntu 22.04, 24.04 or 26.04 (any flavor), or a system based on one
+- a 64-bit processor: **amd64** (Intel/AMD PCs) or **arm64** (for example NVIDIA Jetson, Raspberry Pi 4/5 with 64-bit Ubuntu).
+  32-bit ARM (armhf) isn't supported, because ROS 2 publishes no packages for it; the first page says so.
+  On Humble with arm64, Nav2 and TurtleBot 3 install without their Gazebo Classic demo world, which isn't built for arm64.
 - a graphical session and a user with admin (sudo) rights
 - internet and about 10 GB of free disk space
 - `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`, `python3-yaml`, `librsvg2-common` (the one-line install adds these)
@@ -73,7 +77,7 @@ Optional:
 
 ## How to use it
 
-1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
+1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), your processor type, free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. It also shows your computer (processor, cores, memory) and graphics card, with the NVIDIA driver version if there is one. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
 2. **Choose:** pick ROS 2 itself, then tick the categories you want. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
 3. **Review:** see what you picked, how many packages that means, and the download size.
 4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If Ubuntu is busy with its own updates (common on a new computer), the installer says so and waits. If something fails, you get a plain-English reason (another install running, no disk space, download interrupted) and a **Try again** button.
@@ -92,7 +96,7 @@ Screenshots are from a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow y
 
 ## What you can install
 
-First pick **ROS 2 itself**: Desktop or Desktop-Full, plus `ros-dev-tools` and `rosdep`.
+First pick **ROS 2 itself**: **Desktop** (recommended), **Desktop-Full**, or **ROS-Base** (no graphical tools, for robots, servers, Raspberry Pi and Jetson), plus `ros-dev-tools` and `rosdep`.
 Then tick any of these categories. Each one installs all the sections in it:
 
 | Category | Section | Main packages |

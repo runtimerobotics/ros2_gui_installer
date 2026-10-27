@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, explain_failure, for_distro, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, explain_failure, for_distro, parse_lspci, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -105,6 +105,22 @@ assert "internet" in explain_failure("E: Failed to fetch http://packages.ros.org
 assert "aren't available" in explain_failure("E: Unable to locate package ros-lyrical-turtlebot4-simulator")
 assert explain_failure("dpkg: error processing package foo (--configure)") is None
 
+# Graphics names from lspci -mm (a real line from an RTX 4060 laptop, an AMD card, a VM).
+LSPCI = """01:00.0 "VGA compatible controller" "NVIDIA Corporation" "AD107M [GeForce RTX 4060 Max-Q / Mobile]" -ra1 -p00 "Lenovo" "AD107M"
+03:00.0 "VGA compatible controller" "Advanced Micro Devices, Inc. [AMD/ATI]" "Navi 23 [Radeon RX 6600]" -rc7 "x" "y"
+00:0f.0 "VGA compatible controller" "VMware" "SVGA II Adapter" "x" "y"
+00:1f.3 "Audio device" "Intel Corporation" "Raptor Lake High Definition Audio Controller" "x" "y"
+"""
+assert parse_lspci(LSPCI) == ["NVIDIA GeForce RTX 4060 Max-Q / Mobile", "AMD Radeon RX 6600", "VMware SVGA II Adapter"]
+
+# arm64: Humble has no Gazebo Classic there, so Nav2 and TurtleBot 3 install without their
+# simulation and have no demo, but stay available (Jetson boards run Humble on arm64).
+assert "ros-humble-turtlebot3-gazebo" in expand(next(g for g in CATALOG["goals"] if g["id"] == "nav2")["packages"], "humble", "amd64")
+assert "ros-humble-turtlebot3-gazebo" not in expand(next(g for g in CATALOG["goals"] if g["id"] == "nav2")["packages"], "humble", "arm64")
+assert for_distro(next(g for g in CATALOG["goals"] if g["id"] == "nav2")["demo"]["command"], "humble", "arm64") is None
+assert {"nav2", "turtlebot3"} <= usable_goals("humble", None, "arm64")
+assert "ros-base" in CATALOG["base"]["variants"] and all(d["command"] for d in CATALOG["base"]["demos"])
+
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"
 assert detect_distro({"ID": "linuxmint", "VERSION_ID": "22", "VERSION_CODENAME": "wilma", "UBUNTU_CODENAME": "noble"}) == "jazzy"
@@ -129,7 +145,7 @@ if distro and repo_configured():
     pkgs = catalog_packages(distro)
     missing = set(pkgs) - parse_policy(run(["apt-cache", "policy", *pkgs]))
     for g in CATALOG["goals"]:
-        if distro in g.get("not_released_for", []):
+        if {distro, f"{distro}-{ros2_installer.ARCH}"} & set(g.get("not_released_for", [])):
             own = set(expand(g["packages"], distro))
             assert own & missing, f"{g['id']} is now released for {distro}: remove not_released_for"
             missing -= own

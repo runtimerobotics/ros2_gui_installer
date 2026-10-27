@@ -24,10 +24,11 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.4"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.5"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
+MIN_RAM_GB = 4  # below this Gazebo and RViz struggle
 ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
 ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
 
@@ -40,14 +41,23 @@ def run(cmd):
         return ""
 
 
+ARCH = run(["dpkg", "--print-architecture"]).strip() or "unknown"
+SUPPORTED_ARCHS = ("amd64", "arm64")  # what packages.ros.org builds ROS 2 for; armhf has none
+
+
 def os_release():
     pairs = (line.split("=", 1) for line in Path("/etc/os-release").read_text().splitlines() if "=" in line)
     return {k: v.strip('"') for k, v in pairs}
 
 
-def for_distro(value, distro):
-    """Catalog values are either shared, or a {default: ..., <distro>: ...} map."""
-    return value.get(distro, value["default"]) if isinstance(value, dict) else value
+def for_distro(value, distro, arch=None):
+    """Catalog values are either shared, or a {default: ..., <distro>: ..., <distro>-<arch>: ...} map."""
+    if not isinstance(value, dict):
+        return value
+    for key in (f"{distro}-{arch or ARCH}", distro):
+        if key in value:
+            return value[key]
+    return value["default"]
 
 
 def detect_distro(osr=None):
@@ -57,8 +67,8 @@ def detect_distro(osr=None):
     return CATALOG["distros"].get(osr.get("UBUNTU_CODENAME") or osr.get("VERSION_CODENAME"))
 
 
-def expand(pkgs, distro):
-    return [p.format(distro=distro) for p in for_distro(pkgs, distro)]
+def expand(pkgs, distro, arch=None):
+    return [p.format(distro=distro) for p in for_distro(pkgs, distro, arch)]
 
 
 def with_required(goal_ids):
@@ -73,15 +83,16 @@ def with_required(goal_ids):
     return [g for g in CATALOG["goals"] if g["id"] in wanted]
 
 
-def usable_goals(distro, avail):
+def usable_goals(distro, avail, arch=None):
     """Ids of sections that can be installed: everything they need is released for this distro.
     Before the ROS repo is added apt knows no ROS packages (avail is None), so the catalog's
     not_released_for list is the only guide then."""
     def ok(g):
         chain = with_required([g["id"]])
-        if any(distro in r.get("not_released_for", []) for r in chain):
+        blocked = {distro, f"{distro}-{arch or ARCH}"}
+        if any(blocked & set(r.get("not_released_for", [])) for r in chain):
             return False
-        return avail is None or {p for r in chain for p in expand(r["packages"], distro)} <= avail
+        return avail is None or {p for r in chain for p in expand(r["packages"], distro, arch)} <= avail
     return {g["id"] for g in CATALOG["goals"] if ok(g)}
 
 
@@ -249,6 +260,44 @@ def write_env(env):
                         + "".join(f"export {k}={v}\n" for k, v in env.items()))
 
 
+def parse_lspci(text):
+    """Graphics devices in `lspci -mm` output, as short names like "NVIDIA GeForce RTX 4060"."""
+    vendors = {"NVIDIA Corporation": "NVIDIA", "Intel Corporation": "Intel",
+               "Advanced Micro Devices, Inc. [AMD/ATI]": "AMD"}
+    names = []
+    for line in text.splitlines():
+        f = shlex.split(line)
+        if len(f) >= 4 and f[1] in ("VGA compatible controller", "3D controller", "Display controller"):
+            model = re.search(r"\[(.+)\]", f[3])  # the marketing name, when lspci knows it
+            names.append(f"{vendors.get(f[2], f[2])} {model[1] if model else f[3]}")
+    return names
+
+
+def graphics():
+    """("ok"|"warn", description) of the graphics hardware, for the first page."""
+    gpus = parse_lspci(run(["lspci", "-mm"]))
+    nvidia = Path("/proc/driver/nvidia/version")
+    driver = re.search(r"Module\s+([\d.]+)", nvidia.read_text()) if nvidia.exists() else None
+    gpus = [f"{g} (driver {driver[1]})" if driver and g.startswith("NVIDIA") else g for g in gpus]
+    board = Path("/proc/device-tree/model")  # ARM boards: Jetson, Raspberry Pi
+    if gpus:
+        return "ok", ", ".join(gpus)
+    if board.exists():
+        return "ok", board.read_text().strip("\0\n ") + " (built-in graphics)"
+    return "warn", "No graphics card found, so Gazebo and RViz will draw with the processor and run slowly."
+
+
+def computer():
+    """("ok"|"warn", processor, cores and memory), for the first page."""
+    model = re.search(r"^Model name:\s*(.+)$", run(["lscpu"]), re.M)
+    ram = int(re.search(r"^MemTotal:\s*(\d+)", Path("/proc/meminfo").read_text(), re.M)[1]) / 1e6  # GB, as sold
+    name = re.sub(r"\((R|TM)\)", "", model[1]).strip() if model else "Unknown processor"
+    text = f"{name} · {os.cpu_count()} cores · {ram:.0f} GB memory"
+    if ram < MIN_RAM_GB:
+        return "warn", f"{text}. Simulators need at least {MIN_RAM_GB} GB to run well."
+    return "ok", text
+
+
 # Programs that show the admin password prompt for pkexec. GNOME, Cinnamon and Budgie have one built in.
 # shortcut: a fixed list of known agents; an unlisted one only causes a warning, never blocks installing.
 POLKIT_AGENTS = {
@@ -389,7 +438,8 @@ class Installer(Adw.ApplicationWindow):
                                      description="ROS 2 needs a supported Ubuntu version, free disk space and internet.")
         page.add(group)
         self.check_rows = {}
-        for key, title in [("os", "Ubuntu version"), ("disk", "Free disk space"),
+        for key, title in [("os", "Ubuntu version"), ("arch", "Processor type"), ("computer", "Computer"),
+                           ("gpu", "Graphics"), ("disk", "Free disk space"),
                            ("net", "Internet connection"), ("agent", "Password prompt"),
                            ("ros", "ROS 2 already on this computer")]:
             row = Adw.ActionRow(title=title, subtitle="Checking…")
@@ -406,6 +456,14 @@ class Installer(Adw.ApplicationWindow):
             self.set_check("os", "ok", f"{name} → ROS 2 {self.distro.title()}")
         else:
             self.set_check("os", "error", f"{name} is not supported. Use Ubuntu 22.04, 24.04 or 26.04.")
+
+        if ARCH in SUPPORTED_ARCHS:
+            self.set_check("arch", "ok", f"{ARCH}: ROS 2 has packages for it")
+        else:
+            self.set_check("arch", "error", f"{ARCH}: ROS 2 has no packages for it. "
+                                            "Use a 64-bit Ubuntu (amd64 or arm64).")
+        self.set_check("computer", *computer())
+        self.set_check("gpu", *graphics())
 
         free_gb = shutil.disk_usage("/").free / 1e9
         if free_gb >= MIN_FREE_GB:
@@ -595,7 +653,7 @@ class Installer(Adw.ApplicationWindow):
                 label(f"{pkg}  ({state})", "monospace", margin_top=4)
                 if pkg in self.pkg_info:
                     label(self.pkg_info[pkg], "dim-label", "caption", margin_start=12)
-            if "demo" in g:
+            if "demo" in g and for_distro(g["demo"]["command"], d):
                 label(f"Try it: {for_distro(g['demo']['command'], d)}", "caption", margin_top=6)
         scroller = Gtk.ScrolledWindow(child=box, max_content_height=460, propagate_natural_height=True,
                                       propagate_natural_width=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
@@ -937,10 +995,14 @@ class Installer(Adw.ApplicationWindow):
         status = Adw.StatusPage(icon_name="emblem-ok-symbolic", title=f"ROS 2 {d.title()} is ready",
                                 description="Open a new terminal window so it loads ROS 2, or try a demo below.")
         group = Adw.PreferencesGroup(title="Try it")
-        demos = [CATALOG["base"]["demo"]] + [g["demo"] for g in CATALOG["goals"] if "demo" in g
-                                             and set(expand(g["packages"], d)) <= installed(expand(g["packages"], d))]
+        def ready(pkgs):
+            return not pkgs or set(pkgs) <= installed(pkgs)
+        demos = [m for m in CATALOG["base"]["demos"] if ready(expand(m.get("packages", []), d))]
+        demos += [g["demo"] for g in CATALOG["goals"] if "demo" in g and ready(expand(g["packages"], d))]
         for demo in demos:
             command = for_distro(demo["command"], d)
+            if not command:  # no demo for this distro on this architecture
+                continue
             row = Adw.ActionRow(title=demo["title"], subtitle=command)
             button = Gtk.Button(label="Run", valign=Gtk.Align.CENTER)
             button.connect("clicked", lambda _b, cmd=command: self.try_demo(cmd))

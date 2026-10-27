@@ -77,11 +77,13 @@ Optional:
 
 ## How to use it
 
+The window title always shows where you are, for example *Step 2 of 5: Choose what to install*.
+
 1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), your processor type, free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. It also shows your computer (processor, cores, memory) and graphics card, with the NVIDIA driver version if there is one. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
-2. **Choose:** pick ROS 2 itself, then tick the categories you want. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
+2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
 3. **Review:** see what you picked, how many packages that means, and the download size.
 4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If Ubuntu is busy with its own updates (common on a new computer), the installer says so and waits. If something fails, you get a plain-English reason (another install running, no disk space, download interrupted) and a **Try again** button.
-5. **Try it:** one **Run** button per installed category opens your desktop's terminal running a demo, such as turtlesim, Gazebo, Nav2 or MoveIt 2. **Install more** takes you back to pick more.
+5. **Try it:** a **What next?** box shows how to open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>), a first ROS 2 command to type, and a button to the official beginner tutorials. Below it, one **Run** button per installed category opens your desktop's terminal running a demo, such as turtlesim, Gazebo, Nav2 or MoveIt 2; the terminal tells you to press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it. **Install more** takes you back to pick more.
 
 ### Screenshots
 

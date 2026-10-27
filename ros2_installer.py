@@ -24,7 +24,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.5"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.6"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
@@ -342,6 +342,19 @@ def terminal_command(argv, desktop=None, which=shutil.which):
     return ["x-terminal-emulator", "-e", *argv]  # Debian's alternative; most terminals accept this form
 
 
+def demo_script(distro, title, command):
+    """bash script a Try it button runs: load ROS 2, say how to stop, run the demo, keep the terminal open."""
+    start = shlex.quote(f"Starting {title}. Press Ctrl+C in this window to stop it.")
+    done = shlex.quote("Stopped. You can type ros2 commands here, or close this window.")
+    return (f"source /opt/ros/{distro}/setup.bash; {ENV_SOURCE_LINE}; echo {start}; echo; "
+            f"{command}; echo; echo {done}; exec bash")
+
+
+def tutorials_url(distro):
+    """The official "First steps with ROS" learning path; the same page exists for every distro."""
+    return f"https://docs.ros.org/en/{distro}/First-Steps.html"
+
+
 def status_icon(state):
     return Gtk.Image(icon_name={"ok": "emblem-ok-symbolic", "warn": "dialog-warning-symbolic",
                                 "error": "dialog-error-symbolic"}[state])
@@ -362,6 +375,8 @@ class Installer(Adw.ApplicationWindow):
         self.back.connect("clicked", lambda _b: self.on_back())
         self.next.connect("clicked", lambda _b: self.on_next())
         header = Adw.HeaderBar()
+        self.window_title = Adw.WindowTitle(title="ROS 2 Installer")
+        header.set_title_widget(self.window_title)
         header.pack_start(self.back)
         menu = Gio.Menu()
         menu.append("About ROS 2 Installer", "win.about")
@@ -408,8 +423,13 @@ class Installer(Adw.ApplicationWindow):
             self.stack.remove(old)
         self.stack.add_named(widget, name)
 
+    STEPS = {"check": "Step 1 of 5: Check your computer", "choose": "Step 2 of 5: Choose what to install",
+             "packages": "Step 2 of 5: Choose individual packages", "review": "Step 3 of 5: Review",
+             "install": "Step 4 of 5: Install", "done": "Step 5 of 5: Try it"}
+
     def show_page(self, name):
         self.stack.set_visible_child_name(name)
+        self.window_title.set_subtitle(self.STEPS[name])
         self.back.set_visible(name in ("choose", "review", "packages"))
         self.next.set_visible(name != "install")
         self.next.set_label({"review": "Install", "done": "Close", "packages": "Done"}.get(name, "Next"))
@@ -453,7 +473,7 @@ class Installer(Adw.ApplicationWindow):
         osr = os_release()
         name = osr.get("PRETTY_NAME", "Unknown system")
         if self.distro:
-            self.set_check("os", "ok", f"{name} → ROS 2 {self.distro.title()}")
+            self.set_check("os", "ok", f"{name} → ROS 2 {self.distro.title()}, the ROS 2 version made for it")
         else:
             self.set_check("os", "error", f"{name} is not supported. Use Ubuntu 22.04, 24.04 or 26.04.")
 
@@ -536,14 +556,17 @@ class Installer(Adw.ApplicationWindow):
         self.updates = []
         if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
             page.add(self.build_updates_group())
-        base = Adw.PreferencesGroup(title="1. ROS 2 itself", description="Pick one. You can change this later.")
+        base = Adw.PreferencesGroup(title="1. ROS 2 itself",
+                                    description="New to ROS 2? Keep Desktop, tick Learn ROS 2 below, then press Next. "
+                                                "You can add more later.")
         page.add(base)
         self.variant_checks = {}
         first = None
         for vid, v in variants.items():
             check = Gtk.CheckButton(group=first, active=v.get("default", False))
             first = first or check
-            row = Adw.ActionRow(title=v["title"], subtitle=v["description"])
+            row = Adw.ActionRow(title=v["title"] + (" (recommended)" if v.get("default") else ""),
+                                subtitle=v["description"])
             row.add_prefix(check)
             row.set_activatable_widget(check)
             if set(expand(v["packages"], d)) <= have:
@@ -929,7 +952,7 @@ class Installer(Adw.ApplicationWindow):
         code = self.stream(["pkexec", str(HELPER), "install", *pkgs, *upgrades])
         if code == 0:
             # User-level setup: rosdep's cache and ~/.bashrc belong to the user, not root.
-            GLib.idle_add(self.on_line, "##STEP Updating rosdep\n")
+            GLib.idle_add(self.on_line, "##STEP Updating rosdep's list of what ROS 2 projects need\n")
             if self.stream(["bash", "-c", "command -v rosdep >/dev/null && rosdep update || true"]):
                 GLib.idle_add(self.on_line, "rosdep update failed; run it later in a terminal.\n")
             if self.want_bashrc:
@@ -957,7 +980,7 @@ class Installer(Adw.ApplicationWindow):
             self.progress.set_text(f"{desc} ({fraction:.0%})")
             return  # status lines are for the bar, not the log
         buf = self.log.get_buffer()
-        buf.insert(buf.get_end_iter(), line)
+        buf.insert(buf.get_end_iter(), f"\n▶ {line[7:]}" if line.startswith("##STEP ") else line)
         self.log.scroll_mark_onscreen(self.log_end)
         if line.startswith("Waiting for cache lock"):
             self.status.set_label("Waiting for Ubuntu's own updates to finish. This can take a few minutes…")
@@ -993,8 +1016,25 @@ class Installer(Adw.ApplicationWindow):
     def build_done_page(self):
         d = self.distro
         status = Adw.StatusPage(icon_name="emblem-ok-symbolic", title=f"ROS 2 {d.title()} is ready",
-                                description="Open a new terminal window so it loads ROS 2, or try a demo below.")
-        group = Adw.PreferencesGroup(title="Try it")
+                                description="Everything is installed. Here's how to start.")
+        nxt = Adw.PreferencesGroup(title="What next?")
+        loads = self.bashrc.exists() and self.source_line in self.bashrc.read_text()
+        nxt.add(Adw.ActionRow(title="1. Open a terminal",
+                              subtitle="Press Ctrl+Alt+T. A terminal is a window where you type commands. "
+                                       + ("New ones load ROS 2 for you." if loads
+                                          else f"First type: {self.source_line}"),
+                              subtitle_selectable=True))
+        first = ("ros2 run turtlesim turtlesim_node" if installed([f"ros-{d}-turtlesim"])
+                 else "ros2 doctor --report")  # ROS-Base has no turtlesim
+        nxt.add(Adw.ActionRow(title="2. Type your first ROS 2 command", subtitle=f"{first}   (Ctrl+C stops it)",
+                              subtitle_selectable=True))
+        row = Adw.ActionRow(title="3. Follow the beginner tutorials", subtitle="The official step-by-step ROS 2 lessons")
+        learn = Gtk.Button(label="Open", valign=Gtk.Align.CENTER)
+        learn.connect("clicked", lambda _b: Gio.AppInfo.launch_default_for_uri(tutorials_url(d), None))
+        row.add_suffix(learn)
+        nxt.add(row)
+        group = Adw.PreferencesGroup(title="Try a demo",
+                                     description="Each one opens a terminal. Press Ctrl+C there to stop it.")
         def ready(pkgs):
             return not pkgs or set(pkgs) <= installed(pkgs)
         demos = [m for m in CATALOG["base"]["demos"] if ready(expand(m.get("packages", []), d))]
@@ -1005,21 +1045,21 @@ class Installer(Adw.ApplicationWindow):
                 continue
             row = Adw.ActionRow(title=demo["title"], subtitle=command)
             button = Gtk.Button(label="Run", valign=Gtk.Align.CENTER)
-            button.connect("clicked", lambda _b, cmd=command: self.try_demo(cmd))
+            button.connect("clicked", lambda _b, cmd=command, title=demo["title"]: self.try_demo(title, cmd))
             row.add_suffix(button)
             group.add(row)
         more = Gtk.Button(label="Install more", halign=Gtk.Align.CENTER, margin_top=18, css_classes=["pill"])
         more.connect("clicked", lambda _b: (self.build_choose_page(), self.show_page("choose")))  # fresh "Installed" marks
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=18)
+        box.append(nxt)
         box.append(group)
         box.append(more)
         status.set_child(Adw.Clamp(child=box))
         self.replace_page("done", status)
         self.show_page("done")
 
-    def try_demo(self, command):
-        script = f"source /opt/ros/{self.distro}/setup.bash; {ENV_SOURCE_LINE}; {command}; exec bash"
-        subprocess.Popen(terminal_command(["bash", "-c", script]))
+    def try_demo(self, title, command):
+        subprocess.Popen(terminal_command(["bash", "-c", demo_script(self.distro, title, command)]))
 
 
 def main():

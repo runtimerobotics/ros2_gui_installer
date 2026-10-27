@@ -18,20 +18,20 @@ base:
   variants:
     desktop:
       title: Desktop
-      description: ROS 2 with RViz, rqt and the demos. Best place to start.
+      description: Everything you need to learn ROS 2, with the RViz and rqt tools and the demos.
       default: true
       packages:
         - ros-{distro}-desktop
         - ros-dev-tools
     desktop-full:
       title: Desktop-Full
-      description: Everything in Desktop, plus simulation and perception tools. Bigger download.
+      description: Desktop plus the Gazebo simulator and camera/3D tools. A much bigger download.
       packages:
         - ros-{distro}-desktop-full
         - ros-dev-tools
     ros-base:
       title: ROS-Base
-      description: The core of ROS 2 with no graphical tools. For robots, servers, Raspberry Pi and Jetson.
+      description: Only the core of ROS 2, no windows or tools. For robots and boards without a screen (Raspberry Pi, Jetson).
       packages:
         - ros-{distro}-ros-base
         - ros-dev-tools
@@ -60,7 +60,7 @@ goals:
     category: simulate
     title: Simulate robots
     icon: applications-science-symbolic
-    description: Gazebo simulator connected to ROS 2, with ros2_control so simulated robots can move.
+    description: "Run robots in a 3D virtual world on your computer, no hardware needed. Includes the Gazebo simulator and ros2_control, so simulated robots can move."
     packages:
       - ros-{distro}-ros-gz
       - ros-{distro}-ros-gz-sim-demos
@@ -79,7 +79,7 @@ goals:
     not_released_for: [lyrical]  # no TurtleBot 4 for Lyrical yet; CI fails once it's released, so remove this then
     title: Drive a mobile robot
     icon: input-gaming-symbolic
-    description: TurtleBot 4 in Gazebo, plus SLAM Toolbox for building maps.
+    description: "Drive a virtual TurtleBot 4 robot and let it build a map of its surroundings. Includes the TurtleBot 4 simulator and SLAM Toolbox."
     requires: [simulation]
     packages:
       - ros-{distro}-turtlebot4-simulator
@@ -94,7 +94,7 @@ goals:
     category: mobile
     title: Navigate on its own (Nav2)
     icon: mark-location-symbolic
-    description: The Nav2 navigation stack. Send a goal on the map and the robot plans and drives there.
+    description: "Let a robot find its own way to a point you click on a map, avoiding obstacles. Includes the Nav2 navigation stack."
     requires: [simulation]
     packages:
       default:
@@ -121,7 +121,7 @@ goals:
     category: arms
     title: Control a robot arm
     icon: applications-engineering-symbolic
-    description: Universal Robots arm in Gazebo, driven by ros2_control trajectory controllers.
+    description: "Move a virtual industrial robot arm. Includes a Universal Robots arm in Gazebo, driven by ros2_control."
     requires: [simulation]
     packages:
       - ros-{distro}-ur
@@ -135,7 +135,7 @@ goals:
     category: arms
     title: Plan arm motion (MoveIt 2)
     icon: find-location-symbolic
-    description: MoveIt 2 motion planning, with the Panda arm to try it in RViz.
+    description: "Let the computer plan how a robot arm reaches a target without hitting anything. Includes MoveIt 2, with the Panda arm to try it in RViz."
     packages:
       - ros-{distro}-moveit
       - ros-{distro}-moveit-resources-panda-moveit-config
@@ -147,7 +147,7 @@ goals:
     category: connect
     title: Connect from a browser or other tools
     icon: network-workgroup-symbolic
-    description: rosbridge (for web apps and the ROS MCP server) and Foxglove bridge (view your robot in Foxglove).
+    description: "See and control your robot from a web browser or other apps. Includes rosbridge (for web apps and the ROS MCP server) and Foxglove bridge."
     packages:
       - ros-{distro}-rosbridge-suite
       - ros-{distro}-foxglove-bridge
@@ -159,7 +159,7 @@ goals:
     category: mobile
     title: Drive with keyboard or gamepad
     icon: input-keyboard-symbolic
-    description: Keyboard and joystick teleop that works with any robot listening on cmd_vel.
+    description: "Drive any robot with your keyboard or a gamepad. Includes keyboard and joystick teleop for robots that listen on cmd_vel."
     packages:
       - ros-{distro}-teleop-twist-keyboard
       - ros-{distro}-teleop-twist-joy
@@ -174,7 +174,7 @@ goals:
     category: sensors
     title: Use cameras
     icon: camera-web-symbolic
-    description: OpenCV bridge, image processing, and drivers for USB webcams and Intel RealSense.
+    description: "Use USB webcams and depth cameras with ROS 2. Includes OpenCV, image processing, and drivers for webcams and Intel RealSense."
     packages:
       - ros-{distro}-vision-opencv
       - ros-{distro}-image-pipeline
@@ -188,7 +188,7 @@ goals:
     category: models
     title: Describe your own robot (URDF)
     icon: document-edit-symbolic
-    description: URDF and Xacro tools, robot_state_publisher, and the URDF tutorial robots.
+    description: "Describe your own robot's shape and joints, and see it in 3D. Includes URDF and Xacro tools, robot_state_publisher and the tutorial robots."
     packages:
       - ros-{distro}-urdf-tutorial
       - ros-{distro}-urdf-launch
@@ -203,7 +203,7 @@ goals:
     category: tools
     title: Visualize and debug
     icon: utilities-system-monitor-symbolic
-    description: rqt plugins (node graph, TF tree, topic monitor, console), robot diagnostics and RViz visual tools.
+    description: "See what's happening inside ROS 2, like which programs talk to each other and where each part of the robot is. Includes rqt plugins, diagnostics and RViz tools."
     packages:
       - ros-{distro}-rqt-common-plugins
       - ros-{distro}-rqt-tf-tree
@@ -219,7 +219,7 @@ goals:
     category: tools
     title: Record and replay data
     icon: media-record-symbolic
-    description: rosbag2 with the MCAP format, rqt_bag, and PlotJuggler for plotting topics.
+    description: "Record what your robot senses and does, replay it later, and plot it. Includes rosbag2 (MCAP format), rqt_bag and PlotJuggler."
     packages:
       default:
         - ros-{distro}-rosbag2
@@ -240,7 +240,7 @@ goals:
     category: sensors
     title: Use LiDAR, IMU and GPS
     icon: network-wireless-symbolic
-    description: Drivers for Velodyne and Hokuyo LiDARs, IMU filters, NMEA GPS, and point cloud tools.
+    description: "Use laser scanners (LiDAR), motion sensors (IMU) and GPS. Includes drivers for Velodyne and Hokuyo LiDARs, IMU filters, NMEA GPS and point cloud tools."
     packages:
       default:
         - ros-{distro}-velodyne
@@ -260,7 +260,7 @@ goals:
     category: mobile
     title: Know where the robot is (localization)
     icon: find-location-symbolic
-    description: robot_localization fuses wheel odometry, IMU and GPS; AMCL and Cartographer locate the robot on a map.
+    description: "Work out where the robot is, from its wheels, motion sensor, GPS or a map. Includes robot_localization, AMCL and Cartographer."
     packages:
       default:
         - ros-{distro}-robot-localization
@@ -274,7 +274,7 @@ goals:
     category: arms
     title: More arm tools (MoveIt extras)
     icon: applications-engineering-symbolic
-    description: MoveIt Servo for real-time jogging, the Python API, extra planners and IK, and the Robotiq gripper model.
+    description: "Extra arm tools, like moving an arm live with a joystick or controlling MoveIt from Python. Includes MoveIt Servo, the Python API, extra planners and IK, and the Robotiq gripper model."
     requires: [moveit]
     packages:
       - ros-{distro}-moveit-servo
@@ -293,7 +293,7 @@ goals:
     category: learn
     title: Tutorials and examples
     icon: help-browser-symbolic
-    description: The packages the official ROS 2 tutorials use, including turtlesim, minimal C++ and Python nodes, actions, TF2 and lifecycle nodes.
+    description: "Everything the official beginner tutorials use, like the turtlesim robot and small example programs. Includes turtlesim, minimal C++ and Python nodes, actions, TF2 and lifecycle examples."
     packages:
       - ros-{distro}-turtlesim
       - ros-{distro}-demo-nodes-py
@@ -314,7 +314,7 @@ goals:
     category: mobile
     title: TurtleBot 3
     icon: input-gaming-symbolic
-    description: The classic beginner robot used in many courses, with Gazebo worlds and keyboard teleop.
+    description: "The small classic robot used in many courses, in a virtual world or for real. Includes the TurtleBot 3 packages, Gazebo worlds and keyboard driving."
     requires: [simulation]
     packages:
       default:
@@ -334,7 +334,7 @@ goals:
     category: mobile
     title: 3D mapping (RTAB-Map)
     icon: mark-location-symbolic
-    description: RTAB-Map builds 3D maps and localizes with RGB-D cameras, stereo cameras or LiDAR.
+    description: "Build 3D maps of rooms with a depth camera or LiDAR. Includes RTAB-Map."
     packages:
       - ros-{distro}-rtabmap-ros
 
@@ -342,7 +342,7 @@ goals:
     category: sensors
     title: Markers and AprilTags
     icon: view-grid-symbolic
-    description: Detect AprilTags and ArUco markers in camera images to find their position and orientation.
+    description: "Find printed tags (AprilTags, ArUco markers) in a camera image and work out where they are. Includes apriltag_ros and aruco_opencv."
     packages:
       - ros-{distro}-apriltag-ros
       - ros-{distro}-aruco-opencv
@@ -351,7 +351,7 @@ goals:
     category: behavior
     title: Behavior trees and state machines
     icon: view-list-symbolic
-    description: BehaviorTree.CPP (used by Nav2), py_trees with tutorials, SMACH and FlexBE.
+    description: "Program what a robot should do step by step, and what to do when something fails. Includes BehaviorTree.CPP (used by Nav2), py_trees with tutorials, SMACH and FlexBE."
     packages:
       - ros-{distro}-behaviortree-cpp
       - ros-{distro}-py-trees-ros
@@ -366,7 +366,7 @@ goals:
     category: dev
     title: Build, test and debug your own packages
     icon: applications-engineering-symbolic
-    description: Linters and code formatting, launch tests, generate_parameter_library, tracing, and SROS2 security tools.
+    description: "Tools for when you write your own ROS 2 code, like style checks, tests and tracing. Includes ament linters, clang-format, launch testing, generate_parameter_library, tracing and SROS2."
     packages:
       - ros-{distro}-ament-lint-auto
       - ros-{distro}-ament-lint-common

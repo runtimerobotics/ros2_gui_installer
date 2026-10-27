@@ -29,7 +29,7 @@ apt=(apt-get -y -o DPkg::Lock::Timeout=900)
 # The ros2-apt-source package sets up the ROS 2 repository and its signing key. It's the only
 # check that counts: older setups (ros2.list plus a signing key that expired in 2025) get it too.
 if ! dpkg -s ros2-apt-source >/dev/null 2>&1; then
-  step "Adding the ROS 2 package repository"
+  step "Connecting Ubuntu to the ROS 2 download server"
   "${apt[@]}" install software-properties-common curl
   # Ubuntu-based systems like Linux Mint already have universe and their own add-apt-repository
   add-apt-repository -y universe || echo "Couldn't enable universe; continuing (it's usually already on)."
@@ -58,7 +58,7 @@ for f in /etc/apt/sources.list.d/*.list; do
   fi
 done
 
-step "Updating package lists"
+step "Refreshing the list of available software"
 # A broken third-party repository (an old PPA, an expired key) makes this fail even when the ROS
 # lists arrive fine; carry on, and let the install itself fail if the ROS lists are really missing.
 "${apt[@]}" update || echo "Some package lists couldn't be refreshed (see above); carrying on with the ones that worked."
@@ -73,7 +73,7 @@ if [ ${#upgrade[@]} -gt 0 ]; then
 fi
 
 if command -v rosdep >/dev/null && [ ! -e /etc/ros/rosdep/sources.list.d/20-default.list ]; then
-  step "Setting up rosdep"
+  step "Setting up rosdep, the tool that installs what ROS 2 projects need"
   rosdep init
 fi
 step "Finishing up"

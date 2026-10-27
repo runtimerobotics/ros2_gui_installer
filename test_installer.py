@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, explain_failure, for_distro, parse_lspci, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, expand, explain_failure, for_distro, parse_lspci, tutorials_url, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -121,6 +121,17 @@ assert "ros-humble-turtlebot3-gazebo" not in expand(next(g for g in CATALOG["goa
 assert for_distro(next(g for g in CATALOG["goals"] if g["id"] == "nav2")["demo"]["command"], "humble", "arm64") is None
 assert {"nav2", "turtlebot3"} <= usable_goals("humble", None, "arm64")
 assert "ros-base" in CATALOG["base"]["variants"] and all(d["command"] for d in CATALOG["base"]["demos"])
+
+# Try it scripts tell beginners how to stop a demo, and survive odd titles (shell quoting).
+script = demo_script("jazzy", "Robot's demo; rm -rf ~", "echo DEMO-RAN")
+assert "Press Ctrl+C" in script and "source /opt/ros/jazzy/setup.bash" in script
+ran = subprocess.run(["bash", "-c", script], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout
+assert "Starting Robot's demo; rm -rf ~. Press Ctrl+C" in ran and "DEMO-RAN" in ran and "Stopped." in ran, ran
+assert tutorials_url("lyrical") == "https://docs.ros.org/en/lyrical/First-Steps.html"
+
+# Every page the app shows has a "Step N of 5" label.
+pages = set(re.findall(r'show_page\("(\w+)"\)', open(ros2_installer.__file__).read()))
+assert pages <= set(ros2_installer.Installer.STEPS), pages - set(ros2_installer.Installer.STEPS)
 
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"

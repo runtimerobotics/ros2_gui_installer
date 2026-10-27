@@ -26,6 +26,8 @@ It walks you through five steps: **system check → choose → review → instal
 
 Created by **Lentin Joseph** · [Runtime Robotics](https://runtimerobotics.com)
 
+<p align="center"><img src="docs/screenshots/3-categories.png" width="640" alt="Choosing what to install: one row per category with a tick box and an info button"></p>
+
 | Ubuntu | ROS 2 |
 |---|---|
 | 22.04 | Humble |
@@ -61,6 +63,17 @@ Optional:
 3. **Review:** see what you picked, how many packages that means, and the download size.
 4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If something fails, you get a plain-English message and a **Try again** button.
 5. **Try it:** one **Run** button per installed category opens your desktop's terminal running a demo, such as turtlesim, Gazebo, Nav2 or MoveIt 2.
+
+### Screenshots
+
+| | |
+|---|---|
+| <img src="docs/screenshots/1-system-check.png" width="400" alt="System check"><br>**1. System check** | <img src="docs/screenshots/2-choose.png" width="400" alt="Choose page with updates and ROS 2 itself"><br>**2. Choose:** updates and ROS 2 itself |
+| <img src="docs/screenshots/3-categories.png" width="400" alt="Categories with tick boxes"><br>**Tick categories** | <img src="docs/screenshots/4-whats-included.png" width="400" alt="Info popover listing packages"><br>**ⓘ What's included** |
+| <img src="docs/screenshots/5-individual-packages.png" width="400" alt="Searching individual packages"><br>**Individual packages** | <img src="docs/screenshots/6-review.png" width="400" alt="Review with package count and download size"><br>**3. Review** |
+| <img src="docs/screenshots/7-install.png" width="400" alt="Install progress bar"><br>**4. Install** | <img src="docs/screenshots/8-try-it.png" width="400" alt="Try it page with demo buttons"><br>**5. Try it** |
+
+Screenshots are from a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
 
 ## What you can install
 

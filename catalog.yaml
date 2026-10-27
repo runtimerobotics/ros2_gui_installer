@@ -105,3 +105,56 @@ goals:
     demo:
       title: Panda arm with MoveIt 2 in RViz
       command: ros2 launch moveit_resources_panda_moveit_config demo.launch.py
+
+  - id: remote
+    title: Connect from a browser or other tools
+    icon: network-workgroup-symbolic
+    description: rosbridge (for web apps and the ROS MCP server) and Foxglove bridge (view your robot in Foxglove).
+    packages:
+      - ros-{distro}-rosbridge-suite
+      - ros-{distro}-foxglove-bridge
+    demo:
+      title: rosbridge on ws://localhost:9090
+      command: ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+
+  - id: teleop
+    title: Drive with keyboard or gamepad
+    icon: input-keyboard-symbolic
+    description: Keyboard and joystick teleop that works with any robot listening on cmd_vel.
+    packages:
+      - ros-{distro}-teleop-twist-keyboard
+      - ros-{distro}-teleop-twist-joy
+      - ros-{distro}-joy
+    demo:
+      title: Drive the turtle with your keyboard
+      command: >-
+        ros2 run turtlesim turtlesim_node &
+        ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=turtle1/cmd_vel
+
+  - id: perception
+    title: Use cameras
+    icon: camera-web-symbolic
+    description: OpenCV bridge, image processing, and drivers for USB webcams and Intel RealSense.
+    packages:
+      - ros-{distro}-vision-opencv
+      - ros-{distro}-image-pipeline
+      - ros-{distro}-v4l2-camera
+      - ros-{distro}-realsense2-camera
+    demo:
+      title: Show your webcam
+      command: ros2 run rqt_image_view rqt_image_view /image_raw & ros2 run v4l2_camera v4l2_camera_node
+
+# Network settings page. Saved to ~/.config/ros2-gui-installer/env.sh, which ~/.bashrc loads.
+network:
+  rmw:
+    - id: default
+      title: Default (Fast DDS)
+      description: Works out of the box.
+    - id: rmw_cyclonedds_cpp
+      title: Cyclone DDS
+      description: Often more reliable on Wi-Fi and busy classroom networks.
+      package: ros-{distro}-rmw-cyclonedds-cpp
+    - id: rmw_zenoh_cpp
+      title: Zenoh
+      description: "Needs a router running in another terminal: ros2 run rmw_zenoh_cpp rmw_zenohd"
+      package: ros-{distro}-rmw-zenoh-cpp

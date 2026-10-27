@@ -17,6 +17,20 @@ It walks you through five steps: **system check → choose → review → instal
 - **Navigate on its own:** Nav2
 - **Control a robot arm:** Universal Robots in Gazebo
 - **Plan arm motion:** MoveIt 2 with the Panda demo
+- **Connect from a browser or other tools:** rosbridge, Foxglove bridge
+- **Drive with keyboard or gamepad:** `teleop_twist_keyboard`, `teleop_twist_joy`, `joy`
+- **Use cameras:** `vision_opencv`, `image_pipeline`, `v4l2_camera` for USB webcams, RealSense
+
+### Network settings (for classrooms and labs)
+
+The installer can also change three network settings:
+
+- **ROS Domain ID (0–101):** give each student or robot its own number so they don't see each other's topics.
+- **Middleware (RMW):** Default (Fast DDS), Cyclone DDS or Zenoh. The installer installs the package for the one you pick.
+- **This computer only:** keeps ROS 2 traffic on this computer. On Humble it sets `ROS_LOCALHOST_ONLY=1`; on newer versions it sets `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`.
+
+The settings are saved to `~/.config/ros2-gui-installer/env.sh`, and `~/.bashrc` loads that file, so they apply to every new terminal.
+To change them, run the installer again; it starts from the values you saved last time.
 
 If a section isn't released yet for your ROS 2 version, it shows greyed out.
 After installing, the **Try it** page opens a terminal running a demo for each section you installed.

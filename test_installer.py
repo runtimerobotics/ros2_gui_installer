@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Self-check: parsers, helper name validation, and catalog vs. the live apt repo."""
 import subprocess
+import tempfile
+from pathlib import Path
 
-from ros2_installer import (CATALOG, HELPER, expand, for_distro, os_release, parse_policy,
-                            parse_print_uris, repo_configured, run, with_required)
+import ros2_installer
+
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, expand, for_distro, network_env, os_release,
+                            parse_policy, parse_print_uris, read_env, repo_configured, run, with_required,
+                            write_env)
 
 POLICY = """ros-jazzy-ros-gz:
   Installed: 1.0.24
@@ -29,7 +34,8 @@ for bad in ["-oAPT::x=1", "vim", "ros-noetic-desktop", "ros-jazzy-x;rm", "ros-ja
 
 def catalog_packages(distro):
     entries = list(CATALOG["base"]["variants"].values()) + CATALOG["goals"]
-    return [p for e in entries for p in expand(e["packages"], distro)]
+    rmw = [o["package"].format(distro=distro) for o in CATALOG["network"]["rmw"] if "package" in o]
+    return [p for e in entries for p in expand(e["packages"], distro)] + rmw
 
 
 # Every catalog package, for every distro, must pass the helper's check (catches typos),
@@ -40,6 +46,23 @@ for distro in CATALOG["distros"].values():
     for g in CATALOG["goals"]:
         assert for_distro(g["demo"]["command"], distro) and set(g.get("requires", [])) <= ids, g["id"]
 assert [g["id"] for g in with_required(["nav2"])] == ["simulation", "nav2"]
+
+# Network settings: defaults write nothing; localhost uses the right variable per distro;
+# what we write reads back the same.
+assert network_env("jazzy", 0, "default", False) == {}
+assert network_env("humble", 7, "rmw_cyclonedds_cpp", True) == {
+    "ROS_DOMAIN_ID": "7", "RMW_IMPLEMENTATION": "rmw_cyclonedds_cpp", "ROS_LOCALHOST_ONLY": "1"}
+assert network_env("lyrical", 0, "default", True) == {"ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST"}
+with tempfile.TemporaryDirectory() as tmp:
+    ros2_installer.ENV_FILE = Path(tmp) / "sub" / "env.sh"
+    env = network_env("jazzy", 42, "rmw_zenoh_cpp", True)
+    write_env(env)
+    assert read_env() == env
+    out = subprocess.run(["bash", "-c", f"HOME={tmp}; mkdir -p $HOME/.config/ros2-gui-installer; "
+                          f"cp {ros2_installer.ENV_FILE} $HOME/.config/ros2-gui-installer/; "
+                          f"{ENV_SOURCE_LINE}; echo $ROS_DOMAIN_ID $RMW_IMPLEMENTATION"],
+                         capture_output=True, text=True).stdout.split()
+    assert out == ["42", "rmw_zenoh_cpp"], out
 
 # Every catalog package must exist in the ROS repo for this machine's distro.
 distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))

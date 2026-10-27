@@ -5,6 +5,7 @@ Runs as the normal user; only helper.sh runs as root (through pkexec).
 Uses GTK4 + libadwaita 1.1 widgets only, so it works on Ubuntu 22.04 too.
 """
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -23,6 +24,8 @@ HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
+ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
+ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
 
 
 def run(cmd):
@@ -92,6 +95,29 @@ def plan_install(pkgs):
         return None
     count = sum(line.startswith("Inst ") for line in sim.stdout.splitlines())
     return count, parse_print_uris(run(["apt-get", "--print-uris", "-qq", "install", *pkgs]))
+
+
+def network_env(distro, domain_id, rmw, localhost):
+    """Environment variables for the network settings; defaults are left unset."""
+    env = {}
+    if domain_id:
+        env["ROS_DOMAIN_ID"] = str(domain_id)
+    if rmw != "default":
+        env["RMW_IMPLEMENTATION"] = rmw
+    if localhost:  # Humble predates ROS_AUTOMATIC_DISCOVERY_RANGE
+        env.update({"ROS_LOCALHOST_ONLY": "1"} if distro == "humble" else {"ROS_AUTOMATIC_DISCOVERY_RANGE": "LOCALHOST"})
+    return env
+
+
+def read_env():
+    """{VAR: value} saved by a previous run, so the settings page starts from them."""
+    return dict(re.findall(r"^export (\w+)=(\S*)$", ENV_FILE.read_text(), re.M)) if ENV_FILE.exists() else {}
+
+
+def write_env(env):
+    ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+    ENV_FILE.write_text("# Network settings from ROS 2 Installer. Run the installer again to change them.\n"
+                        + "".join(f"export {k}={v}\n" for k, v in env.items()))
 
 
 def status_icon(state):
@@ -280,7 +306,47 @@ class Installer(Adw.ApplicationWindow):
         row.add_prefix(self.bashrc_check)
         row.set_activatable_widget(self.bashrc_check)
         terminal.add(row)
+
+        page.add(self.build_network_group(read_env()))
         self.replace_page("choose", page)
+
+    def build_network_group(self, saved):
+        group = Adw.PreferencesGroup(
+            title="4. Network",
+            description="Leave these alone unless your teacher or lab says otherwise. "
+                        "Computers and robots only see each other when these match.")
+        self.domain = Gtk.SpinButton.new_with_range(0, 101, 1)
+        self.domain.set_valign(Gtk.Align.CENTER)
+        self.domain.set_value(int(saved.get("ROS_DOMAIN_ID", 0)))
+        row = Adw.ActionRow(title="ROS Domain ID",
+                            subtitle="Give each student or robot its own number (0–101) so they don't mix up.")
+        row.add_suffix(self.domain)
+        group.add(row)
+
+        self.rmw_options = CATALOG["network"]["rmw"]
+        ids = [o["id"] for o in self.rmw_options]
+        self.rmw = Adw.ComboRow(title="Middleware (RMW)",
+                                model=Gtk.StringList.new([o["title"] for o in self.rmw_options]))
+        self.rmw.connect("notify::selected", lambda r, _p: r.set_subtitle(self.rmw_options[r.get_selected()]["description"]))
+        saved_rmw = saved.get("RMW_IMPLEMENTATION")
+        self.rmw.set_selected(ids.index(saved_rmw) if saved_rmw in ids else 0)
+        self.rmw.set_subtitle(self.rmw_options[self.rmw.get_selected()]["description"])
+        group.add(self.rmw)
+
+        self.localhost = Gtk.Switch(valign=Gtk.Align.CENTER,
+                                    active="ROS_LOCALHOST_ONLY" in saved or "ROS_AUTOMATIC_DISCOVERY_RANGE" in saved)
+        row = Adw.ActionRow(title="This computer only",
+                            subtitle="Keep ROS 2 traffic off the network. Good for simulation-only classes.")
+        row.add_suffix(self.localhost)
+        row.set_activatable_widget(self.localhost)
+        group.add(row)
+        return group
+
+    def network_choice(self):
+        """(env vars to save, extra package or None) for the network settings shown."""
+        option = self.rmw_options[self.rmw.get_selected()]
+        env = network_env(self.distro, self.domain.get_value_as_int(), option["id"], self.localhost.get_active())
+        return env, option.get("package", "").format(distro=self.distro) or None
 
     def selection(self):
         """(titles, packages) the user picked, packages de-duplicated in order."""
@@ -289,6 +355,11 @@ class Installer(Adw.ApplicationWindow):
         goals = with_required(gid for gid, c in self.goal_checks.items() if c.get_active())
         titles = [f"ROS 2 {variant['title']}"] + [g["title"] for g in goals]
         pkgs = expand(variant["packages"], self.distro) + [p for g in goals for p in expand(g["packages"], self.distro)]
+        env, rmw_pkg = self.network_choice()
+        if env:
+            titles.append("Network: " + ", ".join(f"{k}={v}" for k, v in env.items()))
+        if rmw_pkg:
+            pkgs.append(rmw_pkg)
         return titles, list(dict.fromkeys(pkgs))
 
     # ---- 3. review ----
@@ -338,6 +409,7 @@ class Installer(Adw.ApplicationWindow):
     def start_install(self):
         _titles, pkgs = self.selection()
         self.want_bashrc = self.bashrc_check.get_active() and self.bashrc_check.get_sensitive()
+        self.net_env = self.network_choice()[0]
         self.done = 0
 
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
@@ -374,6 +446,11 @@ class Installer(Adw.ApplicationWindow):
             if self.want_bashrc:
                 with self.bashrc.open("a") as f:
                     f.write(f"\n# Added by ROS 2 Installer\n{self.source_line}\n")
+            write_env(self.net_env)  # always rewritten, so turning a setting off sticks
+            bashrc_text = self.bashrc.read_text() if self.bashrc.exists() else ""
+            if self.net_env and ENV_SOURCE_LINE not in bashrc_text:
+                with self.bashrc.open("a") as f:
+                    f.write(f"\n# ROS 2 network settings (ROS 2 Installer)\n{ENV_SOURCE_LINE}\n")
         GLib.idle_add(self.on_finished, code)
 
     def on_line(self, line):
@@ -421,7 +498,7 @@ class Installer(Adw.ApplicationWindow):
         self.show_page("done")
 
     def try_demo(self, command):
-        script = f"source /opt/ros/{self.distro}/setup.bash && {command}; exec bash"
+        script = f"source /opt/ros/{self.distro}/setup.bash; {ENV_SOURCE_LINE}; {command}; exec bash"
         if shutil.which("gnome-terminal"):
             subprocess.Popen(["gnome-terminal", "--", "bash", "-c", script])
         else:

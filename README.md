@@ -1,5 +1,19 @@
 # ROS 2 GUI Installer
 
+[![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
+[![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/24.04/)
+[![Ubuntu 26.04](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/26.04/)
+<br>
+[![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
+[![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/jazzy/)
+[![ROS 2 Lyrical](https://img.shields.io/badge/ROS%202-Lyrical-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/lyrical/)
+<br>
+[![Python 3](https://img.shields.io/badge/Python-3-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![GTK 4](https://img.shields.io/badge/GTK-4-4A86CF?logo=gtk&logoColor=white)](https://www.gtk.org/)
+[![libadwaita](https://img.shields.io/badge/libadwaita-1.1%2B-4A86CF?logo=gnome&logoColor=white)](https://gnome.pages.gitlab.gnome.org/libadwaita/)
+[![Install: one line](https://img.shields.io/badge/install-curl%20%7C%20bash-2ea44f?logo=gnubash&logoColor=white)](#install)
+[![Last commit](https://img.shields.io/github/last-commit/runtimerobotics/ros2_gui_installer)](https://github.com/runtimerobotics/ros2_gui_installer/commits/main)
+
 A beginner-friendly installer for ROS 2 on Ubuntu, built with GTK4 and libadwaita.
 It walks you through five steps: **system check → choose → review → install → try it**.
 

@@ -16,7 +16,7 @@ main() {
   grep -q '^UBUNTU_CODENAME=' /etc/os-release || grep -qx 'ID=ubuntu' /etc/os-release ||
     echo "Warning: this installer is made for Ubuntu and Ubuntu-based systems; continuing anyway." >&2
 
-  local deps=(python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml curl tar)
+  local deps=(python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml librsvg2-common curl tar)  # librsvg2-common: SVG icons
   local missing=() p
   for p in "${deps[@]}"; do
     dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^ii' || missing+=("$p")

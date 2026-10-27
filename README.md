@@ -47,7 +47,7 @@ You need:
 - Ubuntu 22.04, 24.04 or 26.04 (any flavor), or a system based on one, on amd64 or arm64
 - a graphical session and a user with admin (sudo) rights
 - internet and about 10 GB of free disk space
-- `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`, `python3-yaml` (the one-line install adds these)
+- `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`, `python3-yaml`, `librsvg2-common` (the one-line install adds these)
 - a **password helper** (polkit agent) so `pkexec` can ask for your password. GNOME, KDE, XFCE, MATE, Cinnamon, LXQt and Budgie all ship one.
   Bare window managers like i3 or Sway often don't. The first page of the installer warns you then; install one with `sudo apt install policykit-1-gnome` and start it with your session.
 

@@ -1,0 +1,107 @@
+# What the installer offers. "{distro}" becomes humble / jazzy / lyrical.
+# Add a goal by adding an entry under "goals" -- no code changes needed.
+# A goal whose packages are not in the ROS apt repo for this distro is greyed out.
+# "packages" and "command" can be one value, or a map of {default: ..., humble: ...}
+# when a distro needs something different. "requires" ticks other goals too.
+
+distros:            # Ubuntu VERSION_ID -> ROS 2 distro
+  "22.04": humble
+  "24.04": jazzy
+  "26.04": lyrical
+
+base:
+  variants:
+    desktop:
+      title: Desktop
+      description: ROS 2 with RViz, rqt and the demos. Best place to start.
+      default: true
+      packages:
+        - ros-{distro}-desktop
+        - ros-dev-tools
+    desktop-full:
+      title: Desktop-Full
+      description: Everything in Desktop, plus simulation and perception tools. Bigger download.
+      packages:
+        - ros-{distro}-desktop-full
+        - ros-dev-tools
+  demo:
+    title: Talker
+    command: ros2 run demo_nodes_cpp talker
+
+goals:
+  - id: simulation
+    title: Simulate robots
+    icon: applications-science-symbolic
+    description: Gazebo simulator connected to ROS 2, with ros2_control so simulated robots can move.
+    packages:
+      - ros-{distro}-ros-gz
+      - ros-{distro}-ros-gz-sim-demos
+      - ros-{distro}-ros2-control
+      - ros-{distro}-ros2-controllers
+      - ros-{distro}-gz-ros2-control
+      - ros-{distro}-gz-ros2-control-demos
+      - ros-{distro}-xacro
+      - ros-{distro}-joint-state-publisher-gui
+    demo:
+      title: Diff-drive robot in Gazebo
+      command: ros2 launch gz_ros2_control_demos diff_drive_example.launch.py
+
+  - id: mobile
+    title: Drive a mobile robot
+    icon: input-gaming-symbolic
+    description: TurtleBot 4 in Gazebo, plus SLAM Toolbox for building maps.
+    requires: [simulation]
+    packages:
+      - ros-{distro}-turtlebot4-simulator
+      - ros-{distro}-slam-toolbox
+    demo:
+      title: TurtleBot 4 in Gazebo
+      command:
+        default: ros2 launch turtlebot4_gz_bringup turtlebot4_gz.launch.py
+        humble: ros2 launch turtlebot4_ignition_bringup turtlebot4_ignition.launch.py
+
+  - id: nav2
+    title: Navigate on its own (Nav2)
+    icon: mark-location-symbolic
+    description: The Nav2 navigation stack. Send a goal on the map and the robot plans and drives there.
+    requires: [simulation]
+    packages:
+      default:
+        - ros-{distro}-navigation2
+        - ros-{distro}-nav2-bringup
+      humble:   # Humble's Nav2 demo uses TurtleBot 3 in Gazebo Classic
+        - ros-{distro}-navigation2
+        - ros-{distro}-nav2-bringup
+        - ros-{distro}-turtlebot3-gazebo
+    demo:
+      title: Nav2 with a simulated robot
+      command:
+        default: ros2 launch nav2_bringup tb4_simulation_launch.py headless:=False
+        humble: >-
+          export TURTLEBOT3_MODEL=waffle
+          GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:/opt/ros/humble/share/turtlebot3_gazebo/models &&
+          ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False
+
+  - id: arm
+    title: Control a robot arm
+    icon: applications-engineering-symbolic
+    description: Universal Robots arm in Gazebo, driven by ros2_control trajectory controllers.
+    requires: [simulation]
+    packages:
+      - ros-{distro}-ur
+      - ros-{distro}-ur-simulation-gz
+      - ros-{distro}-rqt-joint-trajectory-controller
+    demo:
+      title: UR5e arm in Gazebo
+      command: ros2 launch ur_simulation_gz ur_sim_control.launch.py ur_type:=ur5e
+
+  - id: moveit
+    title: Plan arm motion (MoveIt 2)
+    icon: find-location-symbolic
+    description: MoveIt 2 motion planning, with the Panda arm to try it in RViz.
+    packages:
+      - ros-{distro}-moveit
+      - ros-{distro}-moveit-resources-panda-moveit-config
+    demo:
+      title: Panda arm with MoveIt 2 in RViz
+      command: ros2 launch moveit_resources_panda_moveit_config demo.launch.py

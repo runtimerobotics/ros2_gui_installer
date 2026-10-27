@@ -381,8 +381,6 @@ class Installer(Adw.ApplicationWindow):
         self.back.connect("clicked", lambda _b: self.on_back())
         self.next.connect("clicked", lambda _b: self.on_next())
         header = Adw.HeaderBar()
-        self.window_title = Adw.WindowTitle(title="ROS 2 Installer")
-        header.set_title_widget(self.window_title)
         header.pack_start(self.back)
         menu = Gio.Menu()
         menu.append("About ROS 2 Installer", "win.about")
@@ -393,6 +391,8 @@ class Installer(Adw.ApplicationWindow):
         self.add_action(about)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(header)
+        box.append(self.build_step_bar())
+        box.append(Gtk.Separator())
         box.append(self.stack)
         self.set_content(box)
 
@@ -429,13 +429,26 @@ class Installer(Adw.ApplicationWindow):
             self.stack.remove(old)
         self.stack.add_named(widget, name)
 
-    STEPS = {"check": "Step 1 of 5: Check your computer", "choose": "Step 2 of 5: Choose what to install",
-             "packages": "Step 2 of 5: Choose individual packages", "review": "Step 3 of 5: Review",
-             "install": "Step 4 of 5: Install", "done": "Step 5 of 5: Try it"}
+    STEP_NAMES = ["Check", "Choose", "Review", "Install", "Try it"]
+    STEPS = {"check": 0, "choose": 1, "packages": 1, "review": 2, "install": 3, "done": 4}  # page -> step
+
+    def build_step_bar(self):
+        """Check ── Choose ── Review ── Install ── Try it: where you are, and what comes next."""
+        bar = Gtk.Box(spacing=8, halign=Gtk.Align.CENTER, margin_top=8, margin_bottom=8)
+        self.step_labels = []
+        for i in range(len(self.STEP_NAMES)):
+            if i:
+                bar.append(Gtk.Label(label="──", css_classes=["dim-label"]))
+            self.step_labels.append(Gtk.Label())
+            bar.append(self.step_labels[-1])
+        return bar
 
     def show_page(self, name):
         self.stack.set_visible_child_name(name)
-        self.window_title.set_subtitle(self.STEPS[name])
+        current = self.STEPS[name]
+        for i, (label, step) in enumerate(zip(self.step_labels, self.STEP_NAMES)):
+            label.set_label(f"{'✓' if i < current else '●' if i == current else '○'} {step}")
+            label.set_css_classes(["accent", "heading"] if i == current else [] if i < current else ["dim-label"])
         self.back.set_visible(name in ("choose", "review", "packages"))
         self.next.set_visible(name != "install")
         self.next.set_label({"review": "Install", "done": "Close", "packages": "Done"}.get(name, "Next"))
@@ -562,7 +575,7 @@ class Installer(Adw.ApplicationWindow):
         self.updates = []
         if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
             page.add(self.build_updates_group())
-        base = Adw.PreferencesGroup(title="1. ROS 2 itself",
+        base = Adw.PreferencesGroup(title="ROS 2 itself",
                                     description="New to ROS 2? Keep Desktop, tick Learn ROS 2 below, then press Next. "
                                                 "You can add more later.")
         page.add(base)
@@ -580,7 +593,7 @@ class Installer(Adw.ApplicationWindow):
             base.add(row)
             self.variant_checks[vid] = check
 
-        group = Adw.PreferencesGroup(title="2. What do you want to do?",
+        group = Adw.PreferencesGroup(title="What do you want to do?",
                                      description="Tick what you want. Press ⓘ to see exactly what each one installs.")
         page.add(group)
         self.have, self.avail, self.pkg_info = have, avail, {}
@@ -611,7 +624,7 @@ class Installer(Adw.ApplicationWindow):
         for cat, check in self.cat_checks.items():
             check.connect("toggled", self.on_category_toggled, cat)
 
-        terminal = Adw.PreferencesGroup(title="3. Terminal")
+        terminal = Adw.PreferencesGroup(title="Terminal")
         page.add(terminal)
         self.bashrc = Path.home() / ".bashrc"
         self.source_line = f"source /opt/ros/{d}/setup.bash"
@@ -626,7 +639,7 @@ class Installer(Adw.ApplicationWindow):
         page.add(self.build_network_group(read_env()))
 
         self.manual = set()  # individually picked packages
-        extra = Adw.PreferencesGroup(title="5. Individual packages",
+        extra = Adw.PreferencesGroup(title="Individual packages",
                                      description="For when you know exactly which ROS 2 package you need.")
         self.manual_row = Adw.ActionRow(title="Pick individual packages", subtitle="Search every ROS 2 package",
                                         activatable=True)
@@ -726,7 +739,7 @@ class Installer(Adw.ApplicationWindow):
         return self.updates if self.updates and self.update_check.get_active() else []
 
     def build_network_group(self, saved):
-        group = Adw.PreferencesGroup(title="4. Network")
+        group = Adw.PreferencesGroup(title="Network")
         # Folded away: a wrong value quietly stops a computer seeing its robot. Open if set before.
         advanced = Adw.ExpanderRow(title="Advanced: network settings", expanded=bool(saved),
                                    subtitle="Leave these alone unless your teacher or lab says otherwise. "

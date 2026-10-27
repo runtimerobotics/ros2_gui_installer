@@ -77,7 +77,7 @@ Optional:
 
 ## How to use it
 
-The window title always shows where you are, for example *Step 2 of 5: Choose what to install*.
+A step bar at the top always shows where you are and what comes next: **Check → Choose → Review → Install → Try it**.
 
 1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), your processor type, free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. It also shows your computer (processor, cores, memory) and graphics card, with the NVIDIA driver version if there is one. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
 2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
@@ -148,7 +148,7 @@ Turn the switch off to remove the timer. You can also run the check by hand:
 
 ### Individual packages
 
-Already know which package you need? Open **5. Individual packages → Pick individual packages** on the choose page.
+Already know which package you need? Open **Individual packages → Pick individual packages** on the choose page.
 It lists every `ros-<distro>-*` package in the ROS 2 repository (about 2,000 for Jazzy, without debug-symbol packages).
 Search by any word in the name or description (`imu`, `lidar`, `moveit servo`), then tick the packages you want.
 Packages you already have are marked **Installed**.
@@ -156,7 +156,7 @@ The packages you pick go into the same install as the sections above.
 
 ### Network settings (for classrooms and labs)
 
-Under **4. Network → Advanced: network settings** (folded away, because a wrong value stops a computer seeing its robot), the installer can change three settings:
+Under **Network → Advanced: network settings** (folded away, because a wrong value stops a computer seeing its robot), the installer can change three settings:
 
 - **ROS Domain ID (0–101):** give each student or robot its own number so they don't see each other's topics.
 - **Middleware (RMW):** Default (Fast DDS), Cyclone DDS or Zenoh. The installer installs the package for the one you pick.

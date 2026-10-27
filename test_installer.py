@@ -132,9 +132,10 @@ hello = subprocess.run(["bash", "-c", terminal_script("jazzy")], capture_output=
 assert "ROS 2 is ready in this terminal" in hello, hello
 assert tutorials_url("lyrical") == "https://docs.ros.org/en/lyrical/First-Steps.html"
 
-# Every page the app shows has a "Step N of 5" label.
+# Every page the app shows lights up a step in the step bar, and every step is used.
 pages = set(re.findall(r'show_page\("(\w+)"\)', open(ros2_installer.__file__).read()))
 assert pages <= set(ros2_installer.Installer.STEPS), pages - set(ros2_installer.Installer.STEPS)
+assert set(ros2_installer.Installer.STEPS.values()) == set(range(len(ros2_installer.Installer.STEP_NAMES)))
 
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"

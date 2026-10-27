@@ -21,15 +21,55 @@ It walks you through five steps: **system check → choose → review → instal
 If a section isn't released yet for your ROS 2 version, it shows greyed out.
 After installing, the **Try it** page opens a terminal running a demo for each section you installed.
 
-## Run
+## Install
+
+Open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | bash
+```
+
+This command:
+
+1. installs the few Ubuntu packages the GUI needs (GTK4, libadwaita, PyYAML), asking for your password if any are missing
+2. downloads the installer to `~/.local/share/ros2-gui-installer`
+3. adds **ROS 2 Installer** to your app menu and a `ros2-gui-installer` command
+4. opens the installer
+
+Run it as your normal user, without `sudo`. The installer asks for your password itself, once, right before it installs ROS 2.
+
+If you'd rather read the script before running it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh
+less install.sh
+bash install.sh
+```
+
+### Open it later
+
+Pick **ROS 2 Installer** from the app menu, or run `~/.local/bin/ros2-gui-installer`.
+You can run it again any time to add more sections.
+
+### Update
+
+Run the same `curl … | bash` command again. It replaces the old copy with the latest version.
+
+### Uninstall the GUI
+
+This removes only the installer app, not ROS 2:
+
+```bash
+rm -rf ~/.local/share/ros2-gui-installer ~/.local/bin/ros2-gui-installer ~/.local/share/applications/ros2-gui-installer.desktop
+```
+
+### Run from a git clone (for development)
 
 ```bash
 sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml
 git clone https://github.com/runtimerobotics/ros2_gui_installer.git
 cd ros2_gui_installer && ./ros2_installer.py
 ```
-
-Run it as your normal user, without `sudo`. When it needs admin rights, it asks for your password once through `pkexec`.
 
 ## How it works
 

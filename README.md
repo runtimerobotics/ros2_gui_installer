@@ -28,6 +28,17 @@ Created by **Lentin Joseph** · [Runtime Robotics](https://runtimerobotics.com)
 
 <p align="center"><img src="docs/screenshots/3-categories.png" width="640" alt="Choosing what to install: one row per category with a tick box and an info button"></p>
 
+## Quick start
+
+On Ubuntu 22.04, 24.04 or 26.04 (or Linux Mint / Pop!_OS), open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) and run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | bash
+```
+
+The installer opens by itself. Press **Next**, tick what you want, then press **Install**.
+Later, open **ROS 2 Installer** from your app menu. More options are under [Install](#install).
+
 | Ubuntu | ROS 2 |
 |---|---|
 | 22.04 | Humble |

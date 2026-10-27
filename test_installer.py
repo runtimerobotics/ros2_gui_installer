@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, expand, explain_failure, for_distro, parse_lspci, tutorials_url, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -127,6 +127,9 @@ script = demo_script("jazzy", "Robot's demo; rm -rf ~", "echo DEMO-RAN")
 assert "Press Ctrl+C" in script and "source /opt/ros/jazzy/setup.bash" in script
 ran = subprocess.run(["bash", "-c", script], capture_output=True, text=True, stdin=subprocess.DEVNULL).stdout
 assert "Starting Robot's demo; rm -rf ~. Press Ctrl+C" in ran and "DEMO-RAN" in ran and "Stopped." in ran, ran
+hello = subprocess.run(["bash", "-c", terminal_script("jazzy")], capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL).stdout
+assert "ROS 2 is ready in this terminal" in hello, hello
 assert tutorials_url("lyrical") == "https://docs.ros.org/en/lyrical/First-Steps.html"
 
 # Every page the app shows has a "Step N of 5" label.

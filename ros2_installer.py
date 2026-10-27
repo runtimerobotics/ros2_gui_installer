@@ -350,6 +350,12 @@ def demo_script(distro, title, command):
             f"{command}; echo; echo {done}; exec bash")
 
 
+def terminal_script(distro):
+    """bash script for the Open terminal button: a terminal with ROS 2 (and network settings) loaded."""
+    hello = shlex.quote("ROS 2 is ready in this terminal. Try: ros2 run turtlesim turtlesim_node")
+    return f"source /opt/ros/{distro}/setup.bash; {ENV_SOURCE_LINE}; echo {hello}; echo; exec bash"
+
+
 def tutorials_url(distro):
     """The official "First steps with ROS" learning path; the same page exists for every distro."""
     return f"https://docs.ros.org/en/{distro}/First-Steps.html"
@@ -1019,33 +1025,45 @@ class Installer(Adw.ApplicationWindow):
                                 description="Everything is installed. Here's how to start.")
         nxt = Adw.PreferencesGroup(title="What next?")
         loads = self.bashrc.exists() and self.source_line in self.bashrc.read_text()
-        nxt.add(Adw.ActionRow(title="1. Open a terminal",
-                              subtitle="Press Ctrl+Alt+T. A terminal is a window where you type commands. "
-                                       + ("New ones load ROS 2 for you." if loads
-                                          else f"First type: {self.source_line}"),
-                              subtitle_selectable=True))
-        first = ("ros2 run turtlesim turtlesim_node" if installed([f"ros-{d}-turtlesim"])
-                 else "ros2 doctor --report")  # ROS-Base has no turtlesim
-        nxt.add(Adw.ActionRow(title="2. Type your first ROS 2 command", subtitle=f"{first}   (Ctrl+C stops it)",
-                              subtitle_selectable=True))
-        row = Adw.ActionRow(title="3. Follow the beginner tutorials", subtitle="The official step-by-step ROS 2 lessons")
-        learn = Gtk.Button(label="Open", valign=Gtk.Align.CENTER)
-        learn.connect("clicked", lambda _b: Gio.AppInfo.launch_default_for_uri(tutorials_url(d), None))
-        row.add_suffix(learn)
+        row = Adw.ActionRow(title="1. Open a terminal",
+                            subtitle="A terminal is a window where you type commands (or press Ctrl+Alt+T). "
+                                     + ("New ones load ROS 2 for you." if loads
+                                        else f"In a terminal you open yourself, first type: {self.source_line}"),
+                            subtitle_selectable=True)
+        row.add_suffix(self.button("Open terminal", lambda: subprocess.Popen(
+            terminal_command(["bash", "-c", terminal_script(d)]))))
         nxt.add(row)
+        if installed([f"ros-{d}-turtlesim"]):
+            title, first = "Turtlesim", "ros2 run turtlesim turtlesim_node"
+        else:  # ROS-Base has no turtlesim
+            title, first = "Check that ROS 2 works", "ros2 doctor --report"
+        row = Adw.ActionRow(title="2. Run your first ROS 2 program", subtitle=f"{first}   (Ctrl+C stops it)",
+                            subtitle_selectable=True)
+        row.add_suffix(self.button("Run", lambda: self.try_demo(title, first)))
+        nxt.add(row)
+        row = Adw.ActionRow(title="3. Follow the beginner tutorials", subtitle="The official step-by-step ROS 2 lessons")
+        row.add_suffix(self.button("Open", lambda: Gio.AppInfo.launch_default_for_uri(tutorials_url(d), None)))
+        nxt.add(row)
+
+        # Every demo is listed; ones whose packages aren't installed are shown but can't be run.
         group = Adw.PreferencesGroup(title="Try a demo",
                                      description="Each one opens a terminal. Press Ctrl+C there to stop it.")
-        def ready(pkgs):
-            return not pkgs or set(pkgs) <= installed(pkgs)
-        demos = [m for m in CATALOG["base"]["demos"] if ready(expand(m.get("packages", []), d))]
-        demos += [g["demo"] for g in CATALOG["goals"] if "demo" in g and ready(expand(g["packages"], d))]
-        for demo in demos:
-            command = for_distro(demo["command"], d)
-            if not command:  # no demo for this distro on this architecture
-                continue
+        demos = [(m, expand(m.get("packages", []), d), "Comes with ROS 2 Desktop.") for m in CATALOG["base"]["demos"]]
+        cat_title = {c["id"]: c["title"] for c in CATALOG["categories"]}
+        demos += [(g["demo"], expand(g["packages"], d),
+                   f"Press Install more below and tick “{cat_title[g['category']]}”.")
+                  for g in CATALOG["goals"] if "demo" in g]
+        demos = [(demo, needs, hint, for_distro(demo["command"], d)) for demo, needs, hint in demos]
+        have = installed([p for _demo, needs, _hint, _cmd in demos for p in needs])
+        rows = [(demo, cmd, set(needs) <= have, hint) for demo, needs, hint, cmd in demos
+                if cmd]  # no command: no demo for this distro on this architecture
+        for demo, command, ready, hint in sorted(rows, key=lambda r: not r[2]):  # runnable ones first
             row = Adw.ActionRow(title=demo["title"], subtitle=command)
-            button = Gtk.Button(label="Run", valign=Gtk.Align.CENTER)
-            button.connect("clicked", lambda _b, cmd=command, title=demo["title"]: self.try_demo(title, cmd))
+            if not ready:
+                row.add_suffix(Gtk.Label(label="Not installed", css_classes=["dim-label"]))
+            button = self.button("Run", lambda cmd=command, title=demo["title"]: self.try_demo(title, cmd))
+            button.set_sensitive(ready)
+            button.set_tooltip_text(None if ready else hint)
             row.add_suffix(button)
             group.add(row)
         more = Gtk.Button(label="Install more", halign=Gtk.Align.CENTER, margin_top=18, css_classes=["pill"])
@@ -1057,6 +1075,12 @@ class Installer(Adw.ApplicationWindow):
         status.set_child(Adw.Clamp(child=box))
         self.replace_page("done", status)
         self.show_page("done")
+
+    @staticmethod
+    def button(label, on_click):
+        button = Gtk.Button(label=label, valign=Gtk.Align.CENTER)
+        button.connect("clicked", lambda _b: on_click())
+        return button
 
     def try_demo(self, title, command):
         subprocess.Popen(terminal_command(["bash", "-c", demo_script(self.distro, title, command)]))

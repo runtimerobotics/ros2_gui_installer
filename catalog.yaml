@@ -375,9 +375,6 @@ goals:
       - ros-{distro}-generate-parameter-library
       - ros-{distro}-tracetools-launch
       - ros-{distro}-sros2
-    demo:
-      title: Check your ROS 2 setup with ros2 doctor
-      command: ros2 doctor --report
 
 # Network settings page. Saved to ~/.config/ros2-gui-installer/env.sh, which ~/.bashrc loads.
 network:

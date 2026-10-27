@@ -24,7 +24,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.0"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.1"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
@@ -846,13 +846,15 @@ class Installer(Adw.ApplicationWindow):
         self.log.scroll_mark_onscreen(self.log_end)
         if line.startswith("##STEP "):
             self.status.set_label(line[7:].strip() + "…")
-            self.progress.set_fraction(0)  # each apt run (install, then updates) fills the bar again
-            self.saw_download = False
+            if line.startswith(("##STEP Installing packages", "##STEP Updating ROS 2 packages")):
+                self.progress.set_fraction(0)  # each apt run (install, then updates) fills the bar again
+                self.saw_download = False
         elif self.progress.get_fraction() == 0:
             self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
     def on_finished(self, code):
         if code == 0:
+            self.progress.set_fraction(1)
             self.build_done_page()
             return
         if code == 126:  # pkexec: the user closed the password prompt

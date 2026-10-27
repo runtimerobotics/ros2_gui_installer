@@ -70,7 +70,8 @@ categories = {c["id"] for c in CATALOG["categories"]}
 for distro in CATALOG["distros"].values():
     assert helper_accepts(*catalog_packages(distro)), distro
     for g in CATALOG["goals"]:
-        assert "demo" not in g or for_distro(g["demo"]["command"], distro), g["id"]
+        # amd64 always has a demo; "no demo" (null) entries are only for one architecture (humble-arm64)
+        assert "demo" not in g or for_distro(g["demo"]["command"], distro, "amd64"), g["id"]
         assert set(g.get("requires", [])) <= ids and g["category"] in categories, g["id"]
 assert [g["id"] for g in with_required(["nav2"])] == ["simulation", "nav2"]
 

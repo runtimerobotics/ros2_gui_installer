@@ -48,7 +48,7 @@ Comment=Install ROS 2, simulation, Nav2, MoveIt 2 and more
 Exec=$bin
 Icon=system-software-install
 Terminal=false
-Categories=Development;Education;
+Categories=Development;
 EOF
 
   echo "Done. Open \"ROS 2 Installer\" from your app menu, or run: $bin"

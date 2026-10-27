@@ -12,6 +12,8 @@ import socket
 import subprocess
 import sys
 import threading
+import time
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -24,11 +26,12 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.8"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.9"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
 MIN_RAM_GB = 4  # below this Gazebo and RViz struggle
+LOG_DIR = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "ros2-gui-installer"
 ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
 ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
 
@@ -81,6 +84,25 @@ def with_required(goal_ids):
             wanted.add(gid)
             todo += by_id[gid].get("requires", [])
     return [g for g in CATALOG["goals"] if g["id"] in wanted]
+
+
+RELEASE_TAG = re.compile(r"/releases/tag/v?(\d+(?:\.\d+)*)$")
+
+
+def newer_release(current, latest_url):
+    """The latest version if it's newer than current, read from a releases/latest redirect URL; else None."""
+    m = RELEASE_TAG.search(latest_url or "")
+    as_tuple = lambda v: tuple(int(x) for x in v.split("."))  # noqa: E731
+    return m[1] if m and as_tuple(m[1]) > as_tuple(current) else None
+
+
+def latest_release_url():
+    """Where GitHub's releases/latest redirects to ('' when offline). No rate limit, unlike the API."""
+    try:
+        request = urllib.request.Request(f"{REPO_URL}/releases/latest", method="HEAD")
+        return urllib.request.urlopen(request, timeout=5).geturl()
+    except OSError:
+        return ""
 
 
 def usable_goals(distro, avail, arch=None):
@@ -237,6 +259,21 @@ def explain_failure(log):
     return None
 
 
+def log_report(distro, log):
+    """The install log with a header that says which setup it came from, for sharing when asking for help."""
+    header = (f"ROS 2 Installer {__version__} | {os_release().get('PRETTY_NAME', 'unknown system')} | "
+              f"{ARCH} | ROS 2 {distro}\n")
+    return header + log
+
+
+def save_log(text):
+    """Keep every install's log in ~/.local/state/ros2-gui-installer/ and return its path."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    path = LOG_DIR / f"install-{time.strftime('%Y%m%d-%H%M%S')}.log"
+    path.write_text(text)
+    return path
+
+
 def network_env(distro, domain_id, rmw, localhost):
     """Environment variables for the network settings; defaults are left unset."""
     env = {}
@@ -361,9 +398,21 @@ def tutorials_url(distro):
     return f"https://docs.ros.org/en/{distro}/First-Steps.html"
 
 
+def a11y_label(widget, text):
+    """The name a screen reader announces for a widget that shows no text of its own."""
+    widget.update_property([Gtk.AccessibleProperty.LABEL], [text])
+    return widget
+
+
+def decorative(icon_name):
+    """An icon that only decorates its row's text, so screen readers skip it."""
+    return Gtk.Image(icon_name=icon_name, accessible_role=Gtk.AccessibleRole.PRESENTATION)
+
+
 def status_icon(state):
-    return Gtk.Image(icon_name={"ok": "emblem-ok-symbolic", "warn": "dialog-warning-symbolic",
-                                "error": "dialog-error-symbolic"}[state])
+    icon, name = {"ok": ("emblem-ok-symbolic", "OK"), "warn": ("dialog-warning-symbolic", "Warning"),
+                  "error": ("dialog-error-symbolic", "Problem")}[state]
+    return a11y_label(Gtk.Image(icon_name=icon), name)
 
 
 class Installer(Adw.ApplicationWindow):
@@ -448,6 +497,7 @@ class Installer(Adw.ApplicationWindow):
         current = self.STEPS[name]
         for i, (label, step) in enumerate(zip(self.step_labels, self.STEP_NAMES)):
             label.set_label(f"{'✓' if i < current else '●' if i == current else '○'} {step}")
+            a11y_label(label, f"{step}, {'done' if i < current else 'current step' if i == current else 'still to come'}")
             label.set_css_classes(["accent", "heading"] if i == current else [] if i < current else ["dim-label"])
         self.back.set_visible(name in ("choose", "review", "packages"))
         self.next.set_visible(name != "install")
@@ -473,6 +523,7 @@ class Installer(Adw.ApplicationWindow):
 
     def build_check_page(self):
         page = Adw.PreferencesPage()
+        page.add(self.build_self_update_group())
         group = Adw.PreferencesGroup(title="Checking your computer",
                                      description="ROS 2 needs a supported Ubuntu version, free disk space and internet.")
         page.add(group)
@@ -543,6 +594,29 @@ class Installer(Adw.ApplicationWindow):
         self.check_rows["net"][0].set_subtitle("Checking…")
         threading.Thread(target=check_net, daemon=True).start()
 
+    def build_self_update_group(self):
+        """Hidden until a newer release of this installer turns up (checked in the background)."""
+        group = Adw.PreferencesGroup(visible=False)
+        row = Adw.ActionRow()
+        row.add_prefix(decorative("software-update-available-symbolic"))
+        row.add_suffix(self.button("Release page", lambda: Gio.AppInfo.launch_default_for_uri(
+            f"{REPO_URL}/releases/latest", None)))
+        group.add(row)
+
+        def show(version):
+            how = ("Download the new .deb from the release page." if str(HERE).startswith("/usr/lib/")
+                   else "To update, run the one-line install command again (it's on the release page).")
+            row.set_title(f"ROS 2 Installer {version} is available")
+            row.set_subtitle(f"You have {__version__}. {how}")
+            group.set_visible(True)
+
+        def check():
+            version = newer_release(__version__, latest_release_url())
+            if version:
+                GLib.idle_add(show, version)
+        threading.Thread(target=check, daemon=True).start()
+        return group
+
     def set_check(self, key, state, subtitle):
         row, icon = self.check_rows[key]
         if icon:
@@ -610,13 +684,13 @@ class Installer(Adw.ApplicationWindow):
             if missing:
                 subtitle += f" · not available for ROS 2 {d.title()} yet: {', '.join(missing)}"
             row = Adw.ActionRow(title=c["title"], subtitle=subtitle)
-            row.add_prefix(Gtk.Image(icon_name=members[0].get("icon", "package-x-generic-symbolic")))
+            row.add_prefix(decorative(members[0].get("icon", "package-x-generic-symbolic")))
             check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
             complete = usable and {p for g in usable for p in expand(g["packages"], d)} <= have
             if complete:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
             check.set_sensitive(bool(usable) and not complete)
-            row.add_suffix(self.info_button(members))
+            row.add_suffix(self.info_button(members, c["title"]))
             row.add_suffix(check)
             row.set_activatable_widget(check)
             group.add(row)
@@ -643,7 +717,7 @@ class Installer(Adw.ApplicationWindow):
                                      description="For when you know exactly which ROS 2 package you need.")
         self.manual_row = Adw.ActionRow(title="Pick individual packages", subtitle="Search every ROS 2 package",
                                         activatable=True)
-        self.manual_row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+        self.manual_row.add_suffix(decorative("go-next-symbolic"))
         self.manual_row.connect("activated", lambda _r: self.open_packages())
         extra.add(self.manual_row)
         page.add(extra)
@@ -662,10 +736,11 @@ class Installer(Adw.ApplicationWindow):
     def load_descriptions(self, pkgs):
         self.pkg_info = parse_show(run(["apt-cache", "show", "--no-all-versions", *pkgs]))
 
-    def info_button(self, goals):
+    def info_button(self, goals, name):
         """ⓘ button whose popover lists what the given sections install."""
         button = Gtk.MenuButton(icon_name="help-about-symbolic", valign=Gtk.Align.CENTER,
-                                tooltip_text="What's included", css_classes=["flat"])
+                                tooltip_text=f"What's included in {name}", css_classes=["flat"])
+        a11y_label(button, f"What's included in {name}")
         button.set_create_popup_func(lambda b: b.set_popover(self.info_popover(goals)))  # built when opened
         return button
 
@@ -949,10 +1024,18 @@ class Installer(Adw.ApplicationWindow):
         self.log_end = self.log.get_buffer().create_mark(None, self.log.get_buffer().get_end_iter(), False)
         scroller = Gtk.ScrolledWindow(child=self.log, vexpand=True, min_content_height=240)
         self.details = Gtk.Expander(label="Show details", child=scroller)
-        self.retry = Gtk.Button(label="Try again", visible=False, halign=Gtk.Align.CENTER,
-                                css_classes=["pill", "suggested-action"])
+        self.retry = Gtk.Button(label="Try again", css_classes=["pill", "suggested-action"])
         self.retry.connect("clicked", lambda _b: self.start_install())
-        for w in (self.status, self.progress, self.details, self.retry):
+        # Shown after a failure, so a student can send the log instead of describing the problem.
+        self.copy_log = Gtk.Button(label="Copy details", css_classes=["pill"])
+        self.copy_log.connect("clicked", lambda _b: self.copy_report())
+        self.open_log = Gtk.Button(label="Open log", css_classes=["pill"])
+        self.open_log.connect("clicked", lambda _b: Gio.AppInfo.launch_default_for_uri(
+            self.log_path.as_uri(), None))
+        self.fail_buttons = Gtk.Box(spacing=12, halign=Gtk.Align.CENTER, visible=False)
+        for b in (self.copy_log, self.open_log, self.retry):
+            self.fail_buttons.append(b)
+        for w in (self.status, self.progress, self.details, self.fail_buttons):
             page.append(w)
         self.replace_page("install", page)
         self.show_page("install")
@@ -1011,8 +1094,22 @@ class Installer(Adw.ApplicationWindow):
         elif self.progress.get_fraction() == 0:
             self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
+    def report(self):
+        buf = self.log.get_buffer()
+        return log_report(self.distro, buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False))
+
+    def copy_report(self):
+        text = self.report()
+        self.get_clipboard().set_content(Gdk.ContentProvider.new_for_bytes(
+            "text/plain;charset=utf-8", GLib.Bytes.new(text.encode())))
+        self.copy_log.set_label("Copied")
+
     def on_finished(self, code):
         self.installing = False
+        try:
+            self.log_path = save_log(self.report())
+        except OSError:  # a full disk can be why the install failed; don't hide that failure behind this one
+            self.log_path = None
         if code == 0:
             self.progress.set_fraction(1)
             self.build_done_page()
@@ -1027,7 +1124,8 @@ class Installer(Adw.ApplicationWindow):
             reason = explain_failure(buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False))
             self.status.set_label(reason or "Something went wrong. Open “Show details” to see why, then try again.")
             self.details.set_expanded(True)
-        self.retry.set_visible(True)
+        self.fail_buttons.set_visible(True)
+        self.open_log.set_visible(self.log_path is not None)
         self.back.set_visible(True)
 
     # ---- 5. done / try it ----

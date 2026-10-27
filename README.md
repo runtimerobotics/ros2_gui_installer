@@ -212,7 +212,8 @@ You can run it again any time to add more sections.
 
 ### Update
 
-Run the same `curl … | bash` command again. It replaces the old copy with the latest release.
+When a newer version is out, the installer's first page says so, with a link to the release.
+Run the same `curl … | bash` command again (or install the new `.deb`). It replaces the old copy with the latest release.
 To see which version you have, open **☰ → About ROS 2 Installer**, or run:
 
 ```bash
@@ -248,6 +249,40 @@ sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml
 git clone https://github.com/runtimerobotics/ros2_gui_installer.git
 cd ros2_gui_installer && ./ros2_installer.py
 ```
+
+## Troubleshooting
+
+When an install fails, press **Copy details** (or **Open log**) and send that text with your question.
+Every install's log is also saved in `~/.local/state/ros2-gui-installer/`.
+
+**"Another program is still installing software (often Ubuntu's own updates)"**
+On a new computer, Ubuntu installs its own updates in the first minutes. The installer waits up to 15 minutes for them; if that's not enough, wait a little longer or restart the computer, then press **Try again**.
+
+**No password prompt appears, or "Couldn't get admin rights"**
+Your user must be an administrator: `groups` should list `sudo`. On desktops without a password helper (bare window managers like i3 or Sway), the first page warns you; install one with `sudo apt install policykit-1-gnome` and start it with your session.
+
+**"There isn't enough free disk space"**
+ROS 2 Desktop-Full with simulation needs about 10 GB. Check with `df -h /`, free some space, then press **Try again**.
+
+**"The download was interrupted"**
+Check your internet connection (on the first page, **Check again** retests it), then press **Try again**. apt keeps what it already downloaded.
+
+**"Some packages aren't available for your ROS 2 version"**
+Go back and untick that category. On Humble with arm64 (Jetson, Raspberry Pi), Nav2 and TurtleBot 3 install without their Gazebo Classic demo world.
+
+**The first page says your Ubuntu or processor isn't supported**
+The installer needs Ubuntu 22.04, 24.04 or 26.04 (or Linux Mint / Pop!_OS built on them) on amd64 or arm64. 32-bit ARM (armhf) has no ROS 2 packages.
+
+**An old ROS 2 setup on this computer**
+Computers set up before the 2025 ROS key change have an old `ros2.list` source. The installer switches it off by renaming it to `ros2.list.disabled-by-ros2-installer` in `/etc/apt/sources.list.d/` (nothing is deleted) and adds the current `ros2-apt-source` package instead.
+
+**`ros2: command not found`**
+Open a **new** terminal, or the installer's **Open terminal** button. If you unticked *Load ROS 2 in every new terminal*, type `source /opt/ros/<distro>/setup.bash` first (for example `jazzy`).
+
+**Gazebo or RViz is very slow**
+Check the **Graphics** row on the first page. Virtual machines and computers without a graphics card draw 3D with the processor, which is slow.
+
+**Still stuck?** [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues) and paste the copied details.
 
 ## How it works
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, newer_release, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -136,6 +136,23 @@ assert tutorials_url("lyrical") == "https://docs.ros.org/en/lyrical/First-Steps.
 pages = set(re.findall(r'show_page\("(\w+)"\)', open(ros2_installer.__file__).read()))
 assert pages <= set(ros2_installer.Installer.STEPS), pages - set(ros2_installer.Installer.STEPS)
 assert set(ros2_installer.Installer.STEPS.values()) == set(range(len(ros2_installer.Installer.STEP_NAMES)))
+
+# Install logs are saved with a header naming the setup.
+with tempfile.TemporaryDirectory() as tmp:
+    ros2_installer.LOG_DIR = Path(tmp) / "logs"
+    saved = ros2_installer.save_log(ros2_installer.log_report("jazzy", "E: something broke\n"))
+    text = saved.read_text()
+    assert saved.parent == Path(tmp) / "logs" and saved.name.startswith("install-") and saved.suffix == ".log"
+    assert text.startswith(f"ROS 2 Installer {ros2_installer.__version__} |") and "ROS 2 jazzy" in text
+    assert text.endswith("E: something broke\n")
+
+# Installer update notice: only a strictly newer release counts; offline ('') means no notice.
+base = "https://github.com/runtimerobotics/ros2_gui_installer/releases"
+assert newer_release("0.1.8", f"{base}/tag/v0.1.9") == "0.1.9"
+assert newer_release("0.1.8", f"{base}/tag/v0.2.0") == "0.2.0"
+assert newer_release("0.1.10", f"{base}/tag/v0.1.9") is None  # compared as numbers, not text
+assert newer_release("0.1.8", f"{base}/tag/v0.1.8") is None
+assert newer_release("0.1.8", base) is None and newer_release("0.1.8", "") is None
 
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"

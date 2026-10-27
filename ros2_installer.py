@@ -322,6 +322,19 @@ def load_profile(text):
             "terminal": data.get("terminal", True)}
 
 
+def profile_text(name, ros, categories, packages, network, terminal):
+    """A workshop profile as YAML, written so load_profile() reads it back unchanged."""
+    data = {"name": name, "ros": ros, "categories": categories}
+    if packages:
+        data["packages"] = packages
+    if network:
+        data["network"] = network
+    data["terminal"] = terminal
+    return (f"# ROS 2 Installer workshop profile, saved by version {__version__}.\n"
+            "# Open it with:  ros2-gui-installer --profile <this file or its URL>\n"
+            + yaml.safe_dump(data, sort_keys=False))
+
+
 def fetch_profile(source):
     """The text of a profile from an http(s) URL or a file path. Raises ValueError with a plain reason."""
     try:
@@ -495,18 +508,24 @@ class Installer(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.pack_start(self.back)
         menu = Gio.Menu()
+        menu.append("Load profile…", "win.load-profile")
+        menu.append("Save choices as profile…", "win.save-profile")
         menu.append("About ROS 2 Installer", "win.about")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
         header.pack_end(self.next)
-        about = Gio.SimpleAction.new("about", None)
-        about.connect("activate", lambda *_: self.show_about())
-        self.add_action(about)
+        for name, handler in [("about", self.show_about), ("load-profile", self.load_profile_dialog),
+                              ("save-profile", self.save_profile_dialog)]:
+            action = Gio.SimpleAction.new(name, None)
+            action.connect("activate", lambda *_a, handler=handler: handler())
+            action.set_enabled(name == "about" or bool(self.distro))  # profiles need the choose page
+            self.add_action(action)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(header)
         box.append(self.build_step_bar())
         box.append(Gtk.Separator())
         box.append(self.stack)
-        self.set_content(box)
+        self.toasts = Adw.ToastOverlay(child=box)
+        self.set_content(self.toasts)
 
         self.build_check_page()
         if self.distro:
@@ -764,7 +783,7 @@ class Installer(Adw.ApplicationWindow):
             complete = usable and {p for g in usable for p in expand(g["packages"], d)} <= have
             if complete:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
-            check.set_sensitive(bool(usable) and not complete)
+            check.set_sensitive(bool(usable))  # ticking an installed one is harmless and lets it go in a profile
             row.add_suffix(self.info_button(members, c["title"]))
             row.add_suffix(check)
             row.set_activatable_widget(check)
@@ -805,17 +824,22 @@ class Installer(Adw.ApplicationWindow):
             self.set_check("profile", "warn", f"Couldn't use the workshop profile: {profile}. "
                                               "You can still choose by hand.")
             return
-        self.set_check("profile", "ok", f"{profile['name']}: your choices are filled in on the next page")
+        if "profile" in self.check_rows:
+            self.set_check("profile", "ok", f"{profile['name']}: your choices are filled in on the next page")
         if not self.distro:
             return
         d, notes = self.distro, []
         self.variant_checks[profile["ros"]].set_active(True)
+        for check in self.cat_checks.values():  # a profile replaces the current choices
+            check.set_active(False)
+        self.manual.clear()
+        self.manual_row.set_subtitle("Search every ROS 2 package")
         titles = {c["id"]: c["title"] for c in CATALOG["categories"]}
         for cat in profile["categories"]:
             check = self.cat_checks[cat]
             if check.get_sensitive():
                 check.set_active(True)
-            elif not any(g["id"] in self.usable for g in self.cat_members[cat]):
+            else:
                 notes.append(f"{titles[cat]} isn't available for ROS 2 {d.title()}")
         wanted = [p.format(distro=d) for p in profile["packages"]]
         mine = [p for p in wanted if p.startswith(f"ros-{d}-")]
@@ -841,8 +865,82 @@ class Installer(Adw.ApplicationWindow):
         row = Adw.ActionRow(title=GLib.markup_escape_text(f"Workshop profile: {profile['name']}"),
                             subtitle=GLib.markup_escape_text(text))
         row.add_prefix(decorative("emblem-documents-symbolic"))
+        if getattr(self, "profile_row", None) and self.profile_row.get_parent():
+            self.profile_group.remove(self.profile_row)  # loading another profile replaces the banner
+        self.profile_row = row
         self.profile_group.add(row)
         self.profile_group.set_visible(True)
+
+    def toast(self, text):
+        self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(text), timeout=5))
+
+    def pick_file(self, save, callback):
+        """Ask for a .yaml file to open or save; calls callback(path) unless the user cancels."""
+        yaml_files = Gtk.FileFilter(name="Workshop profiles (*.yaml)")
+        yaml_files.add_pattern("*.yaml")
+        yaml_files.add_pattern("*.yml")
+        title = "Save choices as profile" if save else "Load profile"
+        if hasattr(Gtk, "FileDialog"):  # GTK 4.10+: Ubuntu 24.04 and later
+            dialog = Gtk.FileDialog(title=title, default_filter=yaml_files)
+            if save:
+                dialog.set_initial_name("my-course.yaml")
+
+            def done(d, result):
+                try:
+                    chosen = (d.save_finish if save else d.open_finish)(result)
+                except GLib.Error:  # cancelled
+                    return
+                if chosen:
+                    callback(chosen.get_path())
+            (dialog.save if save else dialog.open)(self, None, done)
+        else:  # Ubuntu 22.04's GTK 4.6
+            chooser = Gtk.FileChooserNative(title=title, transient_for=self, modal=True,
+                                            action=Gtk.FileChooserAction.SAVE if save else Gtk.FileChooserAction.OPEN)
+            chooser.add_filter(yaml_files)
+            if save:
+                chooser.set_current_name("my-course.yaml")
+
+            def response(c, answer):
+                if answer == Gtk.ResponseType.ACCEPT:
+                    callback(c.get_file().get_path())
+            chooser.connect("response", response)
+            self.chooser = chooser  # keep it alive while it's open
+            chooser.show()
+
+    def load_profile_dialog(self):
+        def load(path):
+            try:
+                profile = load_profile(fetch_profile(path))
+            except ValueError as e:
+                self.toast(f"Couldn't load the profile: {e}")
+                return
+            self.apply_profile(profile)
+            self.show_page("choose")
+            self.toast(f"Loaded “{profile['name']}”. Check the choices, then press Next.")
+        self.pick_file(False, load)
+
+    def profile_from_choices(self, name):
+        """The current choices as profile YAML. Package names use {distro}, so it works on any version."""
+        ros = next(k for k, c in self.variant_checks.items() if c.get_active())
+        categories = [cat for cat, check in self.cat_checks.items() if check.get_active()]
+        packages = sorted(p.replace(f"ros-{self.distro}-", "ros-{distro}-", 1) for p in self.manual)
+        rmw = self.rmw_options[self.rmw.get_selected()]["id"]
+        network = {k: v for k, v in [("domain_id", self.domain.get_value_as_int()), ("rmw", rmw),
+                                      ("localhost", self.localhost.get_active())]
+                   if v not in (0, "default", False)}
+        return profile_text(name, ros, categories, packages, network, self.bashrc_check.get_active())
+
+    def save_profile_dialog(self):
+        def save(path):
+            path = Path(path) if Path(path).suffix in (".yaml", ".yml") else Path(path + ".yaml")
+            name = path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or "My course"
+            try:
+                path.write_text(self.profile_from_choices(name))
+            except OSError as e:
+                self.toast(f"Couldn't save the profile: {e.strerror}")
+                return
+            self.toast(f"Saved “{name}” to {path}")
+        self.pick_file(True, save)
 
     def on_category_toggled(self, check, cat):
         """Ticking a category also ticks the categories its sections need (Nav2 needs Simulate)."""

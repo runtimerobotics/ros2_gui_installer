@@ -19,12 +19,14 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gio, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
+__version__ = "0.1.0"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
+APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
 ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
 ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
@@ -294,15 +296,16 @@ class Installer(Adw.ApplicationWindow):
         self.show_page("check")
 
     def show_about(self):
-        credits = dict(copyright="© 2026 Lentin Joseph, Runtime Robotics", website="https://runtimerobotics.com")
+        credits = dict(copyright="© 2026 Lentin Joseph, Runtime Robotics", website="https://runtimerobotics.com",
+                       version=__version__)
         if hasattr(Adw, "AboutDialog"):  # libadwaita 1.5+ (Ubuntu 24.04 and later)
-            Adw.AboutDialog(application_name="ROS 2 Installer", application_icon="system-software-install",
+            Adw.AboutDialog(application_name="ROS 2 Installer", application_icon=APP_ID,
                             developer_name="Lentin Joseph", developers=["Lentin Joseph https://runtimerobotics.com"],
                             comments="A beginner-friendly installer for ROS 2 on Ubuntu.",
                             issue_url=f"{REPO_URL}/issues", **credits).present(self)
         else:  # Ubuntu 22.04's libadwaita 1.1 has no About dialog
             Gtk.AboutDialog(transient_for=self, modal=True, program_name="ROS 2 Installer",
-                            logo_icon_name="system-software-install", authors=["Lentin Joseph"],
+                            logo_icon_name=APP_ID, authors=["Lentin Joseph"],
                             comments="A beginner-friendly installer for ROS 2 on Ubuntu.\nRuntime Robotics",
                             **credits).present()
 
@@ -889,13 +892,23 @@ class Installer(Adw.ApplicationWindow):
 
 
 def main():
+    if "--version" in sys.argv:
+        print(f"ROS 2 Installer {__version__}")
+        return 0
     if "--check-updates" in sys.argv:
         check_updates()
         return 0
     if os.geteuid() == 0:
         sys.exit("Run the installer without sudo; it asks for your password when it needs it.")
-    app = Adw.Application(application_id="org.ros2.GuiInstaller")
-    app.connect("activate", lambda a: Installer(a).present())
+    GLib.set_prgname(APP_ID)  # X11 window class, so the dock matches the window to its menu entry and icon
+    app = Adw.Application(application_id=APP_ID)
+
+    def activate(a):
+        # The icon ships in data/, so it shows even when running from a git clone.
+        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(str(HERE / "data"))
+        Gtk.Window.set_default_icon_name(APP_ID)
+        Installer(a).present()
+    app.connect("activate", activate)
     return app.run(sys.argv)
 
 

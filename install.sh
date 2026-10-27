@@ -10,7 +10,9 @@ main() {
   local repo=https://github.com/runtimerobotics/ros2_gui_installer
   local dest="$HOME/.local/share/ros2-gui-installer"
   local bin="$HOME/.local/bin/ros2-gui-installer"
-  local desktop="$HOME/.local/share/applications/ros2-gui-installer.desktop"
+  local app_id=com.runtimerobotics.Ros2Installer
+  local desktop="$HOME/.local/share/applications/$app_id.desktop"
+  local icon="$HOME/.local/share/icons/hicolor/scalable/apps/$app_id.svg"
 
   [ "$(id -u)" != 0 ] || { echo "Run this as your normal user, without sudo." >&2; exit 1; }
   grep -q '^UBUNTU_CODENAME=' /etc/os-release || grep -qx 'ID=ubuntu' /etc/os-release ||
@@ -31,23 +33,29 @@ main() {
     sudo apt-get install -y "${missing[@]}" < /dev/null
   fi
 
-  echo "Downloading the installer to $dest"
+  # The latest release, not main: releases/latest redirects to .../releases/tag/<tag>
+  local tag
+  tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$repo/releases/latest" | sed -n 's#.*/releases/tag/##p')
+  [ -n "$tag" ] || { echo "Couldn't find a release of the installer on GitHub. Check your internet connection." >&2; exit 1; }
+  echo "Downloading ROS 2 Installer $tag to $dest"
   local tmp
   tmp=$(mktemp -d)
-  curl -fsSL "$repo/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 -C "$tmp"
+  curl -fsSL "$repo/archive/refs/tags/$tag.tar.gz" | tar -xz --strip-components=1 -C "$tmp"
   [ -x "$tmp/ros2_installer.py" ] || { echo "Download looks wrong; nothing changed." >&2; rm -rf "$tmp"; exit 1; }
-  mkdir -p "$(dirname "$dest")" "$(dirname "$bin")" "$(dirname "$desktop")"
+  mkdir -p "$(dirname "$dest")" "$(dirname "$bin")" "$(dirname "$desktop")" "$(dirname "$icon")"
   rm -rf "$dest"
   mv "$tmp" "$dest"
 
   ln -sf "$dest/ros2_installer.py" "$bin"
+  cp "$dest/data/$app_id.svg" "$icon"
+  rm -f "$HOME/.local/share/applications/ros2-gui-installer.desktop"  # menu entry name before 0.1.0
   cat > "$desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=ROS 2 Installer
 Comment=Install ROS 2, simulation, Nav2, MoveIt 2 and more
 Exec=$bin
-Icon=system-software-install
+Icon=$app_id
 Terminal=false
 Categories=Development;
 EOF

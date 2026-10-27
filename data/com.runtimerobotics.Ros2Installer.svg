@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- ROS 2 Installer app icon: a robot head with a download badge. Original artwork. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="badge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#tile)"/>
+  <rect x="8" y="64" width="112" height="56" rx="26" fill="#000" opacity="0.08"/>
+  <!-- antenna -->
+  <line x1="56" y1="30" x2="56" y2="40" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="56" cy="26" r="6" fill="#fff"/>
+  <!-- head -->
+  <rect x="24" y="40" width="64" height="50" rx="14" fill="#fff"/>
+  <rect x="17" y="56" width="7" height="18" rx="3.5" fill="#fff"/>
+  <rect x="88" y="56" width="7" height="18" rx="3.5" fill="#fff"/>
+  <!-- face -->
+  <circle cx="43" cy="61" r="7" fill="#1e3a8a"/>
+  <circle cx="69" cy="61" r="7" fill="#1e3a8a"/>
+  <path d="M44 77 Q56 84 68 77" fill="none" stroke="#1e3a8a" stroke-width="4" stroke-linecap="round"/>
+  <!-- download badge -->
+  <circle cx="94" cy="94" r="22" fill="url(#badge)" stroke="#fff" stroke-width="4"/>
+  <path d="M94 82 V102 M85 94 L94 103 L103 94" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

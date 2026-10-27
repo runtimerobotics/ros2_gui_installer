@@ -1,6 +1,7 @@
-# ROS 2 GUI Installer
+# <img src="data/com.runtimerobotics.Ros2Installer.svg" width="48" align="center" alt=""> ROS 2 GUI Installer
 
 [![CI](https://github.com/runtimerobotics/ros2_gui_installer/actions/workflows/ci.yml/badge.svg)](https://github.com/runtimerobotics/ros2_gui_installer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/runtimerobotics/ros2_gui_installer?sort=semver)](https://github.com/runtimerobotics/ros2_gui_installer/releases/latest)
 <br>
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/24.04/)
@@ -168,7 +169,7 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 This command:
 
 1. installs the few Ubuntu packages the GUI needs (GTK4, libadwaita, PyYAML), asking for your password if any are missing
-2. downloads the installer to `~/.local/share/ros2-gui-installer`
+2. downloads the latest [release](https://github.com/runtimerobotics/ros2_gui_installer/releases) of the installer to `~/.local/share/ros2-gui-installer`
 3. adds **ROS 2 Installer** to your app menu and a `ros2-gui-installer` command
 4. opens the installer
 
@@ -189,15 +190,26 @@ You can run it again any time to add more sections.
 
 ### Update
 
-Run the same `curl … | bash` command again. It replaces the old copy with the latest version.
+Run the same `curl … | bash` command again. It replaces the old copy with the latest release.
+To see which version you have, open **☰ → About ROS 2 Installer**, or run:
+
+```bash
+~/.local/bin/ros2-gui-installer --version
+```
 
 ### Uninstall the GUI
 
 This removes only the installer app, not ROS 2:
 
 ```bash
-rm -rf ~/.local/share/ros2-gui-installer ~/.local/bin/ros2-gui-installer ~/.local/share/applications/ros2-gui-installer.desktop
+systemctl --user disable --now ros2-gui-installer-updates.timer 2>/dev/null
+rm -f ~/.config/systemd/user/ros2-gui-installer-updates.*
+rm -rf ~/.local/share/ros2-gui-installer ~/.local/bin/ros2-gui-installer \
+  ~/.local/share/applications/com.runtimerobotics.Ros2Installer.desktop \
+  ~/.local/share/icons/hicolor/scalable/apps/com.runtimerobotics.Ros2Installer.svg
 ```
+
+Your network settings in `~/.config/ros2-gui-installer/` and the lines added to `~/.bashrc` stay, because ROS 2 still uses them.
 
 ### Run from a git clone (for development)
 

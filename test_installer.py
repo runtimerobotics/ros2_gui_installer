@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Self-check: parsers, helper name validation, and catalog vs. the live apt repo."""
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -17,6 +18,7 @@ ros-jazzy-missing:
   Installed: (none)
   Candidate: (none)
 """
+assert re.fullmatch(r"\d+\.\d+\.\d+", ros2_installer.__version__), ros2_installer.__version__
 assert parse_policy(POLICY) == {"ros-jazzy-ros-gz"}
 assert parse_print_uris("'http://x/a.deb' a.deb 100 MD5Sum:1\n'http://x/b.deb' b.deb 23 MD5Sum:2\n") == 123
 assert parse_print_uris("") == 0

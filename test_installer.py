@@ -39,12 +39,14 @@ def catalog_packages(distro):
 
 
 # Every catalog package, for every distro, must pass the helper's check (catches typos),
-# and every goal must have a demo command and only require goals that exist.
+# every demo has a command, and goals only point at goals and categories that exist.
 ids = {g["id"] for g in CATALOG["goals"]}
+categories = {c["id"] for c in CATALOG["categories"]}
 for distro in CATALOG["distros"].values():
     assert helper_accepts(*catalog_packages(distro)), distro
     for g in CATALOG["goals"]:
-        assert for_distro(g["demo"]["command"], distro) and set(g.get("requires", [])) <= ids, g["id"]
+        assert "demo" not in g or for_distro(g["demo"]["command"], distro), g["id"]
+        assert set(g.get("requires", [])) <= ids and g["category"] in categories, g["id"]
 assert [g["id"] for g in with_required(["nav2"])] == ["simulation", "nav2"]
 
 # Network settings: defaults write nothing; localhost uses the right variable per distro;

@@ -3,6 +3,8 @@
 # A goal whose packages are not in the ROS apt repo for this distro is greyed out.
 # "packages" and "command" can be one value, or a map of {default: ..., humble: ...}
 # when a distro needs something different. "requires" ticks other goals too.
+# "category" puts a goal in one of the collapsible groups listed under "categories".
+# "demo" is optional: leave it out when a section needs real hardware to show anything.
 
 distros:            # Ubuntu VERSION_ID -> ROS 2 distro
   "22.04": humble
@@ -28,8 +30,18 @@ base:
     title: Talker
     command: ros2 run demo_nodes_cpp talker
 
+categories:         # shown in this order on the choose page
+  - {id: simulate, title: Simulate}
+  - {id: models, title: Robot models}
+  - {id: tools, title: See and record}
+  - {id: sensors, title: Sensors and cameras}
+  - {id: mobile, title: Mobile robots and navigation}
+  - {id: arms, title: Robot arms}
+  - {id: connect, title: Connect to other tools}
+
 goals:
   - id: simulation
+    category: simulate
     title: Simulate robots
     icon: applications-science-symbolic
     description: Gazebo simulator connected to ROS 2, with ros2_control so simulated robots can move.
@@ -47,6 +59,7 @@ goals:
       command: ros2 launch gz_ros2_control_demos diff_drive_example.launch.py
 
   - id: mobile
+    category: mobile
     title: Drive a mobile robot
     icon: input-gaming-symbolic
     description: TurtleBot 4 in Gazebo, plus SLAM Toolbox for building maps.
@@ -61,6 +74,7 @@ goals:
         humble: ros2 launch turtlebot4_ignition_bringup turtlebot4_ignition.launch.py
 
   - id: nav2
+    category: mobile
     title: Navigate on its own (Nav2)
     icon: mark-location-symbolic
     description: The Nav2 navigation stack. Send a goal on the map and the robot plans and drives there.
@@ -83,6 +97,7 @@ goals:
           ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False
 
   - id: arm
+    category: arms
     title: Control a robot arm
     icon: applications-engineering-symbolic
     description: Universal Robots arm in Gazebo, driven by ros2_control trajectory controllers.
@@ -96,6 +111,7 @@ goals:
       command: ros2 launch ur_simulation_gz ur_sim_control.launch.py ur_type:=ur5e
 
   - id: moveit
+    category: arms
     title: Plan arm motion (MoveIt 2)
     icon: find-location-symbolic
     description: MoveIt 2 motion planning, with the Panda arm to try it in RViz.
@@ -107,6 +123,7 @@ goals:
       command: ros2 launch moveit_resources_panda_moveit_config demo.launch.py
 
   - id: remote
+    category: connect
     title: Connect from a browser or other tools
     icon: network-workgroup-symbolic
     description: rosbridge (for web apps and the ROS MCP server) and Foxglove bridge (view your robot in Foxglove).
@@ -118,6 +135,7 @@ goals:
       command: ros2 launch rosbridge_server rosbridge_websocket_launch.xml
 
   - id: teleop
+    category: mobile
     title: Drive with keyboard or gamepad
     icon: input-keyboard-symbolic
     description: Keyboard and joystick teleop that works with any robot listening on cmd_vel.
@@ -132,6 +150,7 @@ goals:
         ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=turtle1/cmd_vel
 
   - id: perception
+    category: sensors
     title: Use cameras
     icon: camera-web-symbolic
     description: OpenCV bridge, image processing, and drivers for USB webcams and Intel RealSense.
@@ -143,6 +162,111 @@ goals:
     demo:
       title: Show your webcam
       command: ros2 run rqt_image_view rqt_image_view /image_raw & ros2 run v4l2_camera v4l2_camera_node
+
+  - id: description
+    category: models
+    title: Describe your own robot (URDF)
+    icon: document-edit-symbolic
+    description: URDF and Xacro tools, robot_state_publisher, and the URDF tutorial robots.
+    packages:
+      - ros-{distro}-urdf-tutorial
+      - ros-{distro}-urdf-launch
+      - ros-{distro}-xacro
+      - ros-{distro}-robot-state-publisher
+      - ros-{distro}-joint-state-publisher-gui
+    demo:
+      title: R2D2 model in RViz with joint sliders
+      command: ros2 launch urdf_tutorial display.launch.py model:=urdf/08-macroed.urdf.xacro
+
+  - id: debugging
+    category: tools
+    title: Visualize and debug
+    icon: utilities-system-monitor-symbolic
+    description: rqt plugins (node graph, TF tree, topic monitor, console), robot diagnostics and RViz visual tools.
+    packages:
+      - ros-{distro}-rqt-common-plugins
+      - ros-{distro}-rqt-tf-tree
+      - ros-{distro}-tf2-tools
+      - ros-{distro}-rqt-robot-monitor
+      - ros-{distro}-diagnostic-aggregator
+      - ros-{distro}-rviz-visual-tools
+    demo:
+      title: See talker and listener in the node graph
+      command: ros2 run demo_nodes_cpp talker & ros2 run demo_nodes_py listener & ros2 run rqt_graph rqt_graph
+
+  - id: recording
+    category: tools
+    title: Record and replay data
+    icon: media-record-symbolic
+    description: rosbag2 with the MCAP format, rqt_bag, and PlotJuggler for plotting topics.
+    packages:
+      default:
+        - ros-{distro}-rosbag2
+        - ros-{distro}-rosbag2-storage-mcap
+        - ros-{distro}-rqt-bag
+        - ros-{distro}-plotjuggler-ros
+      lyrical:  # PlotJuggler isn't released for Lyrical yet
+        - ros-{distro}-rosbag2
+        - ros-{distro}-rosbag2-storage-mcap
+        - ros-{distro}-rqt-bag
+    demo:
+      title: Record the talker into ~/ros2_bags
+      command: >-
+        mkdir -p ~/ros2_bags && ros2 run demo_nodes_cpp talker &
+        ros2 bag record /chatter -o ~/ros2_bags/demo_$(date +%Y%m%d_%H%M%S)
+
+  - id: sensors
+    category: sensors
+    title: Use LiDAR, IMU and GPS
+    icon: network-wireless-symbolic
+    description: Drivers for Velodyne and Hokuyo LiDARs, IMU filters, NMEA GPS, and point cloud tools.
+    packages:
+      default:
+        - ros-{distro}-velodyne
+        - ros-{distro}-urg-node
+        - ros-{distro}-imu-tools
+        - ros-{distro}-nmea-navsat-driver
+        - ros-{distro}-pointcloud-to-laserscan
+        - ros-{distro}-pcl-ros
+      lyrical:  # no Velodyne driver for Lyrical yet
+        - ros-{distro}-urg-node
+        - ros-{distro}-imu-tools
+        - ros-{distro}-nmea-navsat-driver
+        - ros-{distro}-pointcloud-to-laserscan
+        - ros-{distro}-pcl-ros
+
+  - id: localization
+    category: mobile
+    title: Know where the robot is (localization)
+    icon: find-location-symbolic
+    description: robot_localization fuses wheel odometry, IMU and GPS; AMCL and Cartographer locate the robot on a map.
+    packages:
+      default:
+        - ros-{distro}-robot-localization
+        - ros-{distro}-nav2-amcl
+        - ros-{distro}-cartographer-ros
+      lyrical:  # no Cartographer for Lyrical yet
+        - ros-{distro}-robot-localization
+        - ros-{distro}-nav2-amcl
+
+  - id: manipulation
+    category: arms
+    title: More arm tools (MoveIt extras)
+    icon: applications-engineering-symbolic
+    description: MoveIt Servo for real-time jogging, the Python API, extra planners and IK, and the Robotiq gripper model.
+    requires: [moveit]
+    packages:
+      - ros-{distro}-moveit-servo
+      - ros-{distro}-moveit-py
+      - ros-{distro}-moveit-visual-tools
+      - ros-{distro}-moveit-planners-chomp
+      - ros-{distro}-pick-ik
+      - ros-{distro}-robotiq-description
+    demo:
+      title: Jog the Panda arm with MoveIt Servo
+      command:
+        default: ros2 launch moveit_servo demo_twist.launch.py
+        humble: ros2 launch moveit_servo servo_example.launch.py
 
 # Network settings page. Saved to ~/.config/ros2-gui-installer/env.sh, which ~/.bashrc loads.
 network:

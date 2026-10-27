@@ -272,6 +272,12 @@ class Installer(Adw.ApplicationWindow):
         page.add(group)
         self.goal_checks = {}
         titles = {g["id"]: g["title"] for g in goals}
+        expanders = {}  # category id -> (ExpanderRow, its goals)
+        for c in CATALOG["categories"]:
+            members = [g for g in goals if g["category"] == c["id"]]
+            if members:
+                expanders[c["id"]] = (Adw.ExpanderRow(title=c["title"]), members)
+                group.add(expanders[c["id"]][0])
         for g in goals:
             pkgs = set(expand(g["packages"], d))
             needed = {p for r in with_required([g["id"]]) for p in expand(r["packages"], d)}
@@ -288,12 +294,23 @@ class Installer(Adw.ApplicationWindow):
                 row.set_subtitle(f"Not available for ROS 2 {d.title()} yet")
             elif pkgs <= have:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
-            group.add(row)
+            expanders[g["category"]][0].add_row(row)
             self.goal_checks[g["id"]] = check
         for g in goals:  # ticking a goal ticks what it requires, so the screen matches what gets installed
             for req in g.get("requires", []):
                 self.goal_checks[g["id"]].connect(
                     "toggled", lambda c, req=req: c.get_active() and self.goal_checks[req].set_active(True))
+
+        def refresh(cat):
+            """Collapsed rows still show what's inside and how many are ticked."""
+            row, members = expanders[cat]
+            picked = sum(self.goal_checks[m["id"]].get_active() for m in members)
+            summary = ", ".join(m["title"] for m in members)
+            row.set_subtitle(f"{picked} selected · {summary}" if picked else summary)
+        for g in goals:
+            self.goal_checks[g["id"]].connect("toggled", lambda _c, cat=g["category"]: refresh(cat))
+        for cat in expanders:
+            refresh(cat)
 
         terminal = Adw.PreferencesGroup(title="3. Terminal")
         page.add(terminal)
@@ -484,8 +501,8 @@ class Installer(Adw.ApplicationWindow):
         status = Adw.StatusPage(icon_name="emblem-ok-symbolic", title=f"ROS 2 {d.title()} is ready",
                                 description="Open a new terminal window so it loads ROS 2, or try a demo below.")
         group = Adw.PreferencesGroup(title="Try it")
-        demos = [CATALOG["base"]["demo"]] + [g["demo"] for g in CATALOG["goals"]
-                                             if set(expand(g["packages"], d)) <= installed(expand(g["packages"], d))]
+        demos = [CATALOG["base"]["demo"]] + [g["demo"] for g in CATALOG["goals"] if "demo" in g
+                                             and set(expand(g["packages"], d)) <= installed(expand(g["packages"], d))]
         for demo in demos:
             command = for_distro(demo["command"], d)
             row = Adw.ActionRow(title=demo["title"], subtitle=command)

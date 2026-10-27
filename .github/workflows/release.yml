@@ -1,0 +1,24 @@
+name: Release
+
+# When a GitHub release is published, build the .deb from that tag and attach it.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the .deb and attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have=$(sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' ros2_installer.py)
+          [ "$want" = "$have" ] || { echo "Tag $GITHUB_REF_NAME doesn't match __version__ $have" >&2; exit 1; }
+          deb=$(packaging/build-deb.sh)
+          gh release upload "$GITHUB_REF_NAME" "$deb" --clobber

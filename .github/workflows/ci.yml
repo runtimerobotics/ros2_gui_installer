@@ -57,3 +57,28 @@ jobs:
 
       - name: Check shell scripts parse
         run: bash -n helper.sh && bash -n install.sh
+
+  deb:
+    name: .deb package
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Build, install and check the .deb
+        shell: bash
+        run: |
+          deb=$(packaging/build-deb.sh)
+          apt-get install -y "./${deb#$PWD/}"
+          want=$(sed -n 's/^__version__ = "\([^"]*\)".*/\1/p' ros2_installer.py)
+          test "$(ros2-gui-installer --version)" = "ROS 2 Installer $want"
+          test "$(stat -c %U /usr/lib/ros2-gui-installer/helper.sh)" = root   # users can't edit the root helper
+          test -f /usr/share/polkit-1/actions/com.runtimerobotics.Ros2Installer.policy
+          /usr/lib/ros2-gui-installer/helper.sh check ros-jazzy-joy
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb

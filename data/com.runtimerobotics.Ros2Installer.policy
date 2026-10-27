@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Installed by the .deb: gives the password prompt a clear message for the root helper. -->
+<policyconfig>
+  <vendor>Runtime Robotics</vendor>
+  <vendor_url>https://runtimerobotics.com</vendor_url>
+  <icon_name>com.runtimerobotics.Ros2Installer</icon_name>
+  <action id="com.runtimerobotics.Ros2Installer.install">
+    <description>Install or update ROS 2 packages</description>
+    <message>ROS 2 Installer needs your password to install or update ROS 2 packages</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/lib/ros2-gui-installer/helper.sh</annotate>
+  </action>
+</policyconfig>

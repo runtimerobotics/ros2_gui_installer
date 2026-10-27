@@ -1,2 +1,3 @@
-__pycache__/
+dist/
 *.log
+__pycache__/

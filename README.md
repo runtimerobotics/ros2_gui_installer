@@ -20,6 +20,7 @@
 [![GTK 4](https://img.shields.io/badge/GTK-4-4A86CF?logo=gtk&logoColor=white)](https://www.gtk.org/)
 [![libadwaita](https://img.shields.io/badge/libadwaita-1.1%2B-4A86CF?logo=gnome&logoColor=white)](https://gnome.pages.gitlab.gnome.org/libadwaita/)
 [![Install: one line](https://img.shields.io/badge/install-curl%20%7C%20bash-2ea44f?logo=gnubash&logoColor=white)](#install)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 [![Last commit](https://img.shields.io/github/last-commit/runtimerobotics/ros2_gui_installer)](https://github.com/runtimerobotics/ros2_gui_installer/commits/main)
 
 A beginner-friendly installer for ROS 2 on Ubuntu and Ubuntu-based Linux, built with GTK4 and libadwaita.
@@ -183,6 +184,21 @@ less install.sh
 bash install.sh
 ```
 
+### Or: install the .deb package
+
+Each [release](https://github.com/runtimerobotics/ros2_gui_installer/releases/latest) also has a `.deb` package. It's the better choice for lab and shared computers:
+
+- the password prompt says **"ROS 2 Installer needs your password to install or update ROS 2 packages"** instead of a generic message;
+- the part that runs as root lives in `/usr/lib`, where your user account can't change it.
+
+Download `ros2-gui-installer_<version>_all.deb` from the latest release, then:
+
+```bash
+sudo apt install ./ros2-gui-installer_*_all.deb
+```
+
+Use one install method per computer. A copy installed with the `curl` command lives in your home folder and opens instead of the `.deb`, so remove it first (see [Uninstall the GUI](#uninstall-the-gui)).
+
 ### Open it later
 
 Pick **ROS 2 Installer** from the app menu, or run `~/.local/bin/ros2-gui-installer`.
@@ -198,6 +214,14 @@ To see which version you have, open **☰ → About ROS 2 Installer**, or run:
 ```
 
 ### Uninstall the GUI
+
+If you installed the `.deb`:
+
+```bash
+sudo apt remove ros2-gui-installer
+```
+
+If you used the `curl` command:
 
 This removes only the installer app, not ROS 2:
 
@@ -224,6 +248,7 @@ cd ros2_gui_installer && ./ros2_installer.py
 - `catalog.yaml` lists every section with its packages and demo command.
   To add a section, add an entry there; you don't need to change any code.
 - `ros2_installer.py` is the GUI. It runs as your normal user.
+- `packaging/build-deb.sh` builds the `.deb`. When a GitHub release is published, a workflow builds it from that tag and attaches it to the release.
 - `helper.sh` is the only part that runs as root. It refuses any package name that isn't a ROS 2 package. If the ROS 2 apt repository is missing, it adds it using the official [`ros2-apt-source`](https://github.com/ros-infrastructure/ros-apt-source) package. Then it runs `apt-get install` for new packages, and `apt-get install --only-upgrade` for updates.
 - The ROS 2 version comes from `UBUNTU_CODENAME` in `/etc/os-release` (jammy → Humble, noble → Jazzy, resolute → Lyrical). That's why Ubuntu-based systems work too.
 
@@ -244,5 +269,7 @@ If a section is expected to be missing for a version, mark it with `not_released
 ROS 2 Installer is created and maintained by **Lentin Joseph** at [Runtime Robotics](https://runtimerobotics.com).
 Found a bug or have an idea? [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues).
 In the app, open the **☰** menu → **About ROS 2 Installer**.
+
+Licensed under the [Apache License 2.0](LICENSE). © 2026 Lentin Joseph, Runtime Robotics.
 
 ROS and ROS 2 are trademarks of Open Robotics. This installer is an independent project, not affiliated with or endorsed by Open Robotics.

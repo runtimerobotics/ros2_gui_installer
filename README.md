@@ -89,12 +89,12 @@ The window title always shows where you are, for example *Step 2 of 5: Choose wh
 
 | | |
 |---|---|
-| <img src="docs/screenshots/1-system-check.png" width="400" alt="System check"><br>**1. System check** | <img src="docs/screenshots/2-choose.png" width="400" alt="Choose page with updates and ROS 2 itself"><br>**2. Choose:** updates and ROS 2 itself |
+| <img src="docs/screenshots/1-system-check.png" width="400" alt="System check"><br>**1. System check** | <img src="docs/screenshots/2-choose.png" width="400" alt="Choose page: ROS 2 itself, with a hint for beginners"><br>**2. Choose:** ROS 2 itself, with a hint for beginners |
 | <img src="docs/screenshots/3-categories.png" width="400" alt="Categories with tick boxes"><br>**Tick categories** | <img src="docs/screenshots/4-whats-included.png" width="400" alt="Info popover listing packages"><br>**ⓘ What's included** |
 | <img src="docs/screenshots/5-individual-packages.png" width="400" alt="Searching individual packages"><br>**Individual packages** | <img src="docs/screenshots/6-review.png" width="400" alt="Review with package count and download size"><br>**3. Review** |
-| <img src="docs/screenshots/7-install.png" width="400" alt="Install progress bar"><br>**4. Install** | <img src="docs/screenshots/8-try-it.png" width="400" alt="Try it page with demo buttons"><br>**5. Try it** |
+| <img src="docs/screenshots/7-install.png" width="400" alt="Install progress bar"><br>**4. Install** | <img src="docs/screenshots/8-try-it.png" width="400" alt="Last page: What next and demo buttons"><br>**5. Try it:** what next, and demos |
 
-Screenshots are from a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
+Screenshots are from version 0.1.6 on a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
 
 ## What you can install
 

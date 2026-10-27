@@ -73,10 +73,10 @@ Optional:
 ## How to use it
 
 1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
-2. **Choose:** pick ROS 2 itself, then tick the categories you want. You can also update installed ROS 2 packages, set network options, and pick individual packages.
+2. **Choose:** pick ROS 2 itself, then tick the categories you want. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
 3. **Review:** see what you picked, how many packages that means, and the download size.
-4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If something fails, you get a plain-English message and a **Try again** button.
-5. **Try it:** one **Run** button per installed category opens your desktop's terminal running a demo, such as turtlesim, Gazebo, Nav2 or MoveIt 2.
+4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If Ubuntu is busy with its own updates (common on a new computer), the installer says so and waits. If something fails, you get a plain-English reason (another install running, no disk space, download interrupted) and a **Try again** button.
+5. **Try it:** one **Run** button per installed category opens your desktop's terminal running a demo, such as turtlesim, Gazebo, Nav2 or MoveIt 2. **Install more** takes you back to pick more.
 
 ### Screenshots
 
@@ -127,7 +127,7 @@ When a single package is missing for one version (for example PlotJuggler or Car
 
 ### Updates
 
-The **Updates** group at the top of the choose page shows how many of your installed ROS 2 packages have updates waiting. Tick it to update them along with whatever else you install.
+Once ROS 2 is installed, an **Updates** group at the top of the choose page shows how many of your ROS 2 packages have updates waiting. It starts unticked; tick it to update them along with whatever else you install.
 The installer updates only packages you already have, with `apt-get install --only-upgrade`, so it doesn't change which packages apt marks as manually installed.
 
 Turn on **Notify me when ROS 2 updates are ready** to get a desktop notification when updates are waiting.
@@ -149,7 +149,7 @@ The packages you pick go into the same install as the sections above.
 
 ### Network settings (for classrooms and labs)
 
-The installer can also change three network settings:
+Under **4. Network → Advanced: network settings** (folded away, because a wrong value stops a computer seeing its robot), the installer can change three settings:
 
 - **ROS Domain ID (0–101):** give each student or robot its own number so they don't see each other's topics.
 - **Middleware (RMW):** Default (Fast DDS), Cyclone DDS or Zenoh. The installer installs the package for the one you pick.

@@ -24,7 +24,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.2"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.3"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
@@ -204,6 +204,28 @@ def plan_install(pkgs):
     return count, parse_print_uris(run(["apt-get", "--print-uris", "-qq", "install", *pkgs]))
 
 
+# (text apt prints, what to tell a beginner). The first match wins.
+FAILURE_REASONS = [
+    (("Could not get lock", "Unable to acquire the dpkg frontend lock", "Waiting for cache lock"),
+     "Another program is still installing software (often Ubuntu's own updates). "
+     "Wait a few minutes or restart the computer, then press Try again."),
+    (("enough free space", "No space left on device"),
+     "There isn't enough free disk space. Free some up, then press Try again."),
+    (("Failed to fetch", "Temporary failure resolving", "Could not resolve", "Connection failed"),
+     "The download was interrupted. Check your internet connection, then press Try again."),
+    (("Unable to locate package", "has no installation candidate"),
+     "Some packages aren't available for your ROS 2 version. Go back, untick them, and try again."),
+]
+
+
+def explain_failure(log):
+    """One plain sentence for a common apt failure in the log, or None."""
+    for needles, reason in FAILURE_REASONS:
+        if any(n in log for n in needles):
+            return reason
+    return None
+
+
 def network_env(distro, domain_id, rmw, localhost):
     """Environment variables for the network settings; defaults are left unset."""
     env = {}
@@ -373,6 +395,9 @@ class Installer(Adw.ApplicationWindow):
             row = Adw.ActionRow(title=title, subtitle="Checking…")
             group.add(row)
             self.check_rows[key] = [row, None]
+        self.net_retry = Gtk.Button(label="Check again", valign=Gtk.Align.CENTER, visible=False)
+        self.net_retry.connect("clicked", lambda _b: self.run_net_check())
+        self.check_rows["net"][0].add_suffix(self.net_retry)
         self.replace_page("check", page)
 
         osr = os_release()
@@ -404,15 +429,21 @@ class Installer(Adw.ApplicationWindow):
         else:
             self.set_check("ros", "ok", "None yet. This is a fresh install.")
 
+        self.run_net_check()
+
+    def run_net_check(self):
         def check_net():
             try:
                 socket.create_connection(("packages.ros.org", 80), timeout=5).close()
                 result = ("ok", "packages.ros.org is reachable")
             except OSError:
-                result = ("error", "Can't reach packages.ros.org. Connect to the internet, then reopen the installer.")
+                result = ("error", "Can't reach packages.ros.org. Connect to the internet, then press Check again.")
             GLib.idle_add(self.set_check, "net", *result)
 
         self.blockers.add("net")  # until the check finishes
+        self.next.set_sensitive(False)
+        self.net_retry.set_visible(False)
+        self.check_rows["net"][0].set_subtitle("Checking…")
         threading.Thread(target=check_net, daemon=True).start()
 
     def set_check(self, key, state, subtitle):
@@ -423,6 +454,8 @@ class Installer(Adw.ApplicationWindow):
         row.add_suffix(self.check_rows[key][1])
         row.set_subtitle(subtitle)
         (self.blockers.add if state == "error" else self.blockers.discard)(key)
+        if key == "net":
+            self.net_retry.set_visible(state == "error")
         if self.stack.get_visible_child_name() == "check":
             self.next.set_sensitive(not self.blockers)
 
@@ -430,6 +463,9 @@ class Installer(Adw.ApplicationWindow):
 
     def build_choose_page(self):
         d = self.distro
+        stale = self.stack.get_child_by_name("packages")  # "Install more": rebuild with fresh Installed marks
+        if stale:
+            self.stack.remove(stale)
         variants = CATALOG["base"]["variants"]
         goals = CATALOG["goals"]
         everything = [p for v in variants.values() for p in expand(v["packages"], d)] + \
@@ -439,7 +475,9 @@ class Installer(Adw.ApplicationWindow):
         avail = parse_policy(run(["apt-cache", "policy", *everything])) if repo_configured() else None
 
         page = Adw.PreferencesPage()
-        page.add(self.build_updates_group())
+        self.updates = []
+        if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
+            page.add(self.build_updates_group())
         base = Adw.PreferencesGroup(title="1. ROS 2 itself", description="Pick one. You can change this later.")
         page.add(base)
         self.variant_checks = {}
@@ -565,7 +603,6 @@ class Installer(Adw.ApplicationWindow):
 
     def build_updates_group(self):
         group = Adw.PreferencesGroup(title="Updates")
-        self.updates = []
         self.update_check = Gtk.CheckButton(valign=Gtk.Align.CENTER, sensitive=False)  # ticked once updates are found
         self.update_row = Adw.ActionRow(title="Checking for ROS 2 updates…")
         self.update_row.add_suffix(self.update_check)
@@ -596,24 +633,25 @@ class Installer(Adw.ApplicationWindow):
         else:
             self.update_row.set_title("ROS 2 is up to date")
             self.update_row.set_subtitle("No updates for your installed ROS 2 packages.")
-        self.update_check.set_sensitive(bool(n))
-        self.update_check.set_active(bool(n))
+        self.update_check.set_sensitive(bool(n))  # unticked: updating is a choice, not a side effect
 
     def updates_picked(self):
-        return self.updates if self.update_check.get_active() else []
+        return self.updates if self.updates and self.update_check.get_active() else []
 
     def build_network_group(self, saved):
-        group = Adw.PreferencesGroup(
-            title="4. Network",
-            description="Leave these alone unless your teacher or lab says otherwise. "
-                        "Computers and robots only see each other when these match.")
+        group = Adw.PreferencesGroup(title="4. Network")
+        # Folded away: a wrong value quietly stops a computer seeing its robot. Open if set before.
+        advanced = Adw.ExpanderRow(title="Advanced: network settings", expanded=bool(saved),
+                                   subtitle="Leave these alone unless your teacher or lab says otherwise. "
+                                            "Computers and robots only see each other when these match.")
+        group.add(advanced)
         self.domain = Gtk.SpinButton.new_with_range(0, 101, 1)
         self.domain.set_valign(Gtk.Align.CENTER)
         self.domain.set_value(int(saved.get("ROS_DOMAIN_ID", 0)))
         row = Adw.ActionRow(title="ROS Domain ID",
                             subtitle="Give each student or robot its own number (0–101) so they don't mix up.")
         row.add_suffix(self.domain)
-        group.add(row)
+        advanced.add_row(row)
 
         self.rmw_options = CATALOG["network"]["rmw"]
         ids = [o["id"] for o in self.rmw_options]
@@ -623,7 +661,7 @@ class Installer(Adw.ApplicationWindow):
         saved_rmw = saved.get("RMW_IMPLEMENTATION")
         self.rmw.set_selected(ids.index(saved_rmw) if saved_rmw in ids else 0)
         self.rmw.set_subtitle(self.rmw_options[self.rmw.get_selected()]["description"])
-        group.add(self.rmw)
+        advanced.add_row(self.rmw)
 
         self.localhost = Gtk.Switch(valign=Gtk.Align.CENTER,
                                     active="ROS_LOCALHOST_ONLY" in saved or "ROS_AUTOMATIC_DISCOVERY_RANGE" in saved)
@@ -631,7 +669,7 @@ class Installer(Adw.ApplicationWindow):
                             subtitle="Keep ROS 2 traffic off the network. Good for simulation-only classes.")
         row.add_suffix(self.localhost)
         row.set_activatable_widget(self.localhost)
-        group.add(row)
+        advanced.add_row(row)
         return group
 
     def network_choice(self):
@@ -863,7 +901,9 @@ class Installer(Adw.ApplicationWindow):
         buf = self.log.get_buffer()
         buf.insert(buf.get_end_iter(), line)
         self.log.scroll_mark_onscreen(self.log_end)
-        if line.startswith("##STEP "):
+        if line.startswith("Waiting for cache lock"):
+            self.status.set_label("Waiting for Ubuntu's own updates to finish. This can take a few minutes…")
+        elif line.startswith("##STEP "):
             self.status.set_label(line[7:].strip() + "…")
             if line.startswith(("##STEP Installing packages", "##STEP Updating ROS 2 packages")):
                 self.progress.set_fraction(0)  # each apt run (install, then updates) fills the bar again
@@ -883,7 +923,9 @@ class Installer(Adw.ApplicationWindow):
             self.status.set_label("Couldn't get admin rights, so nothing was installed. Check that your user "
                                   "is an administrator and that a password helper is running (see the first page).")
         else:
-            self.status.set_label("Something went wrong. Open “Show details” to see why, then try again.")
+            buf = self.log.get_buffer()
+            reason = explain_failure(buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False))
+            self.status.set_label(reason or "Something went wrong. Open “Show details” to see why, then try again.")
             self.details.set_expanded(True)
         self.retry.set_visible(True)
         self.back.set_visible(True)
@@ -904,7 +946,12 @@ class Installer(Adw.ApplicationWindow):
             button.connect("clicked", lambda _b, cmd=command: self.try_demo(cmd))
             row.add_suffix(button)
             group.add(row)
-        status.set_child(Adw.Clamp(child=group))
+        more = Gtk.Button(label="Install more", halign=Gtk.Align.CENTER, margin_top=18, css_classes=["pill"])
+        more.connect("clicked", lambda _b: (self.build_choose_page(), self.show_page("choose")))  # fresh "Installed" marks
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.append(group)
+        box.append(more)
+        status.set_child(Adw.Clamp(child=box))
         self.replace_page("done", status)
         self.show_page("done")
 

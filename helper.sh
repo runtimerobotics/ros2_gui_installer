@@ -22,7 +22,9 @@ done
 [ "$(id -u)" = 0 ] || { echo "install must run as root (through pkexec)" >&2; exit 1; }
 
 export DEBIAN_FRONTEND=noninteractive
-apt=(apt-get -y -o DPkg::Lock::Timeout=120)   # wait for other apt users instead of failing
+# Wait for other apt users instead of failing: on a fresh Ubuntu, its own automatic updates
+# (unattended-upgrades) often hold the lock for several minutes.
+apt=(apt-get -y -o DPkg::Lock::Timeout=900)
 
 # The ros2-apt-source package sets up the ROS 2 repository and its signing key. It's the only
 # check that counts: older setups (ros2.list plus a signing key that expired in 2025) get it too.
@@ -37,16 +39,20 @@ if ! dpkg -s ros2-apt-source >/dev/null 2>&1; then
   ver=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$src/releases/latest" | sed -n 's#.*/releases/tag/##p')
   [ -n "$ver" ] || ver=$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
                          grep -F '"tag_name"' | awk -F'"' '{print $4}')
-  [ -n "$ver" ] || { echo "Could not reach GitHub to find the ROS 2 repository package." >&2; exit 1; }
+  [[ $ver =~ ^[0-9][0-9.]*$ ]] || { echo "Could not reach GitHub to find the ROS 2 repository package." >&2; exit 1; }
   codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
   deb=$(mktemp --suffix=.deb)
   curl -fsSL -o "$deb" "$src/releases/download/${ver}/ros2-apt-source_${ver}.${codename}_all.deb"
+  # Root installs this file, so make sure it really is the ROS 2 repository package.
+  [ "$(dpkg-deb -f "$deb" Package 2>/dev/null)" = ros2-apt-source ] ||
+    { echo "The downloaded file isn't the ROS 2 repository package; stopping." >&2; rm -f "$deb"; exit 1; }
   dpkg -i "$deb"
   rm -f "$deb"
 fi
 # Old-style ROS 2 sources clash with the package's key, so switch them off (renamed, not deleted).
 for f in /etc/apt/sources.list.d/*.list; do
-  if [ -f "$f" ] && grep -q '^[^#]*packages\.ros\.org/ros2' "$f"; then
+  # Only the main ROS 2 repository: leave ros2-testing and other repositories alone.
+  if [ -f "$f" ] && grep -q '^[^#]*packages\.ros\.org/ros2/ubuntu' "$f"; then
     mv "$f" "$f.disabled-by-ros2-installer"
     echo "Turned off the old ROS 2 source $f (now $f.disabled-by-ros2-installer)"
   fi

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, for_distro, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, explain_failure, for_distro, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -97,6 +97,13 @@ assert "mobile" not in usable_goals("lyrical", None)
 assert "mobile" in usable_goals("jazzy", None)
 assert "nav2" in usable_goals("lyrical", None)  # needs Simulate, which is released
 assert "mobile" not in usable_goals("jazzy", set())  # apt knows nothing is available
+
+# Common apt failures get one plain sentence; anything else falls back to the generic message.
+assert "Another program" in explain_failure("E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 812")
+assert "disk space" in explain_failure("E: You don't have enough free space in /var/cache/apt/archives/.")
+assert "internet" in explain_failure("E: Failed to fetch http://packages.ros.org/ros2/ubuntu/pool/main/x.deb  Connection timed out")
+assert "aren't available" in explain_failure("E: Unable to locate package ros-lyrical-turtlebot4-simulator")
+assert explain_failure("dpkg: error processing package foo (--configure)") is None
 
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"

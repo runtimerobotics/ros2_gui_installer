@@ -37,6 +37,9 @@ jobs:
             > /etc/apt/sources.list.d/ros2.list
           echo "deb http://ppa.launchpadcontent.net/nonexistent-team/nonexistent/ubuntu $codename main" \
             > /etc/apt/sources.list.d/broken-ppa.list
+          # A user's ROS 2 testing repository: the cleanup must leave it alone.
+          echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2-testing/ubuntu $codename main" \
+            > /etc/apt/sources.list.d/ros2-testing.list
 
       - name: Install turtlesim with the real helper
         shell: bash
@@ -46,6 +49,7 @@ jobs:
           test -d "/opt/ros/$distro/share/turtlesim"                          # installed
           test ! -e /etc/apt/sources.list.d/ros2.list                          # old source switched off
           test -e /etc/apt/sources.list.d/ros2.list.disabled-by-ros2-installer
+          test -e /etc/apt/sources.list.d/ros2-testing.list                    # other ROS repos untouched
           grep -q '^pmstatus:' /tmp/helper.log                                 # progress bar input arrived
 
       - name: Run the self-test

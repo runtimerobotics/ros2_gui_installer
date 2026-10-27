@@ -7,10 +7,10 @@
 # "demo" is optional: leave it out when a section needs real hardware to show anything.
 # "not_released_for" lists distros where a goal is expected to be greyed out (checked by CI).
 
-distros:            # Ubuntu VERSION_ID -> ROS 2 distro
-  "22.04": humble
-  "24.04": jazzy
-  "26.04": lyrical
+distros:            # Ubuntu codename -> ROS 2 distro. Ubuntu-based systems (Mint, Pop!_OS)
+  jammy: humble     # report the Ubuntu codename they're built on as UBUNTU_CODENAME.
+  noble: jazzy      # 22.04 / 24.04 / 26.04
+  resolute: lyrical
 
 base:
   variants:

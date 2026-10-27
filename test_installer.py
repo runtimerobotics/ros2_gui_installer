@@ -6,8 +6,8 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, expand, for_distro, network_env, os_release,
-                            parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, with_required,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, for_distro, network_env,
+                            parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, with_required,
                             write_env)
 
 POLICY = """ros-jazzy-ros-gz:
@@ -89,8 +89,24 @@ with tempfile.TemporaryDirectory() as tmp:
                          capture_output=True, text=True).stdout.split()
     assert out == ["42", "rmw_zenoh_cpp"], out
 
+# Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
+assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"
+assert detect_distro({"ID": "linuxmint", "VERSION_ID": "22", "VERSION_CODENAME": "wilma", "UBUNTU_CODENAME": "noble"}) == "jazzy"
+assert detect_distro({"ID": "pop", "VERSION_ID": "22.04", "VERSION_CODENAME": "jammy", "UBUNTU_CODENAME": "jammy"}) == "humble"
+assert detect_distro({"ID": "ubuntu", "VERSION_CODENAME": "resolute"}) == "lyrical"
+assert detect_distro({"ID": "debian", "VERSION_ID": "12", "VERSION_CODENAME": "bookworm"}) is None
+
+# Try it opens the desktop's own terminal, with that terminal's way of taking a command.
+cmd = ["bash", "-c", "echo hi"]
+has = lambda *names: (lambda program: program in names)
+assert terminal_command(cmd, "KDE", has("gnome-terminal", "konsole")) == ["konsole", "-e", *cmd]
+assert terminal_command(cmd, "ubuntu:GNOME", has("gnome-terminal", "konsole")) == ["gnome-terminal", "--", *cmd]
+assert terminal_command(cmd, "XFCE", has("xfce4-terminal")) == ["xfce4-terminal", "-x", *cmd]
+assert terminal_command(cmd, "LXQt", has("qterminal")) == ["qterminal", "-e", "bash -c 'echo hi'"]
+assert terminal_command(cmd, "i3", has()) == ["x-terminal-emulator", "-e", *cmd]
+
 # Every catalog package must exist in the ROS repo for this machine's distro.
-distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
+distro = detect_distro()
 # Goals marked not_released_for this distro must still be missing something, so the
 # marker gets removed once the packages are released.
 if distro and repo_configured():

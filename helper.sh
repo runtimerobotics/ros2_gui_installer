@@ -27,7 +27,8 @@ apt=(apt-get -y -o DPkg::Lock::Timeout=120)   # wait for other apt users instead
 if ! grep -Rqs packages.ros.org /etc/apt/sources.list /etc/apt/sources.list.d; then
   step "Adding the ROS 2 package repository"
   "${apt[@]}" install software-properties-common curl
-  add-apt-repository -y universe
+  # Ubuntu-based systems like Linux Mint already have universe and their own add-apt-repository
+  add-apt-repository -y universe || echo "Couldn't enable universe; continuing (it's usually already on)."
   ver=$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
         grep -F '"tag_name"' | awk -F'"' '{print $4}')
   [ -n "$ver" ] || { echo "Could not reach GitHub to find the ROS 2 repository package." >&2; exit 1; }

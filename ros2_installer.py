@@ -6,6 +6,7 @@ Uses GTK4 + libadwaita 1.1 widgets only, so it works on Ubuntu 22.04 too.
 """
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -45,6 +46,13 @@ def os_release():
 def for_distro(value, distro):
     """Catalog values are either shared, or a {default: ..., <distro>: ...} map."""
     return value.get(distro, value["default"]) if isinstance(value, dict) else value
+
+
+def detect_distro(osr=None):
+    """ROS 2 distro for this system, or None. Uses the Ubuntu codename, so Ubuntu-based
+    systems (Linux Mint, Pop!_OS) map to the Ubuntu release they're built on."""
+    osr = osr or os_release()
+    return CATALOG["distros"].get(osr.get("UBUNTU_CODENAME") or osr.get("VERSION_CODENAME"))
 
 
 def expand(pkgs, distro):
@@ -158,7 +166,7 @@ def set_update_notifications(on):
 
 def check_updates():
     """`--check-updates`, run by the daily timer: a desktop notification when ROS 2 updates are waiting."""
-    distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
+    distro = detect_distro()
     pkgs = upgradable(distro) if distro else []
     print(f"{len(pkgs)} ROS 2 package updates ready")
     if pkgs and shutil.which("notify-send"):
@@ -205,6 +213,50 @@ def write_env(env):
                         + "".join(f"export {k}={v}\n" for k, v in env.items()))
 
 
+# Programs that show the admin password prompt for pkexec. GNOME, Cinnamon and Budgie have one built in.
+# shortcut: a fixed list of known agents; an unlisted one only causes a warning, never blocks installing.
+POLKIT_AGENTS = {
+    "gnome-shell", "cinnamon", "budgie-polkit-dialog",
+    "polkit-gnome-authentication-agent-1", "polkit-kde-authentication-agent-1",
+    "polkit-mate-authentication-agent-1", "lxqt-policykit-agent", "lxpolkit", "xfce-polkit",
+    "hyprpolkitagent", "soteria",
+}
+
+
+def running_programs():
+    names = set()
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            argv0 = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0", 1)[0]
+        except OSError:  # the process ended while we looked
+            continue
+        names.add(os.path.basename(argv0.decode(errors="replace")))
+    return names
+
+
+# (program, desktop it comes with, how it takes a command): a list of flags followed by
+# the command's own arguments, or "string" for terminals that take the command as one string.
+TERMINALS = [
+    ("gnome-terminal", "GNOME", ["--"]),
+    ("ptyxis", "GNOME", ["--"]),
+    ("konsole", "KDE", ["-e"]),
+    ("xfce4-terminal", "XFCE", ["-x"]),
+    ("mate-terminal", "MATE", ["-x"]),
+    ("qterminal", "LXQT", "string"),
+    ("lxterminal", "LXDE", "string"),
+]
+
+
+def terminal_command(argv, desktop=None, which=shutil.which):
+    """Command that opens a terminal window running argv, preferring the desktop's own terminal."""
+    desktop = (desktop if desktop is not None else os.environ.get("XDG_CURRENT_DESKTOP", "")).upper()
+    ranked = sorted(TERMINALS, key=lambda t: t[1] not in desktop.split(":"))  # stable: desktop's own first
+    for program, _desktop, style in ranked:
+        if which(program):
+            return [program, "-e", shlex.join(argv)] if style == "string" else [program, *style, *argv]
+    return ["x-terminal-emulator", "-e", *argv]  # Debian's alternative; most terminals accept this form
+
+
 def status_icon(state):
     return Gtk.Image(icon_name={"ok": "emblem-ok-symbolic", "warn": "dialog-warning-symbolic",
                                 "error": "dialog-error-symbolic"}[state])
@@ -213,7 +265,7 @@ def status_icon(state):
 class Installer(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="ROS 2 Installer", default_width=760, default_height=680)
-        self.distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
+        self.distro = detect_distro()
         self.blockers = set()
         self.total = 0
 
@@ -293,7 +345,8 @@ class Installer(Adw.ApplicationWindow):
         page.add(group)
         self.check_rows = {}
         for key, title in [("os", "Ubuntu version"), ("disk", "Free disk space"),
-                           ("net", "Internet connection"), ("ros", "ROS 2 already on this computer")]:
+                           ("net", "Internet connection"), ("agent", "Password prompt"),
+                           ("ros", "ROS 2 already on this computer")]:
             row = Adw.ActionRow(title=title, subtitle="Checking…")
             group.add(row)
             self.check_rows[key] = [row, None]
@@ -311,6 +364,13 @@ class Installer(Adw.ApplicationWindow):
             self.set_check("disk", "ok", f"{free_gb:.0f} GB free")
         else:
             self.set_check("disk", "error", f"Only {free_gb:.1f} GB free. Free up at least {MIN_FREE_GB} GB, then reopen the installer.")
+
+        if POLKIT_AGENTS & running_programs():
+            self.set_check("agent", "ok", "Your desktop can ask for your password when installing.")
+        else:
+            self.set_check("agent", "warn",
+                           "No password helper found, so installing may fail. On a desktop without one, run "
+                           "“sudo apt install policykit-1-gnome”, then log out and back in.")
 
         found = sorted(os.listdir("/opt/ros")) if os.path.isdir("/opt/ros") else []
         others = [d.title() for d in found if d != self.distro]
@@ -792,8 +852,11 @@ class Installer(Adw.ApplicationWindow):
         if code == 0:
             self.build_done_page()
             return
-        if code in (126, 127):  # pkexec: prompt dismissed / not authorized
+        if code == 126:  # pkexec: the user closed the password prompt
             self.status.set_label("The password prompt was closed, so nothing was installed.")
+        elif code == 127:  # pkexec: not authorized, or no password helper (polkit agent) to ask
+            self.status.set_label("Couldn't get admin rights, so nothing was installed. Check that your user "
+                                  "is an administrator and that a password helper is running (see the first page).")
         else:
             self.status.set_label("Something went wrong. Open “Show details” to see why, then try again.")
             self.details.set_expanded(True)
@@ -822,11 +885,7 @@ class Installer(Adw.ApplicationWindow):
 
     def try_demo(self, command):
         script = f"source /opt/ros/{self.distro}/setup.bash; {ENV_SOURCE_LINE}; {command}; exec bash"
-        if shutil.which("gnome-terminal"):
-            subprocess.Popen(["gnome-terminal", "--", "bash", "-c", script])
-        else:
-            # shortcut: assumes the terminal accepts "-e cmd args"; add per-terminal flags if one doesn't
-            subprocess.Popen(["x-terminal-emulator", "-e", "bash", "-c", script])
+        subprocess.Popen(terminal_command(["bash", "-c", script]))
 
 
 def main():

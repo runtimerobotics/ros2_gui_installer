@@ -13,7 +13,8 @@ main() {
   local desktop="$HOME/.local/share/applications/ros2-gui-installer.desktop"
 
   [ "$(id -u)" != 0 ] || { echo "Run this as your normal user, without sudo." >&2; exit 1; }
-  grep -qx 'ID=ubuntu' /etc/os-release || echo "Warning: this installer is made for Ubuntu; continuing anyway." >&2
+  grep -q '^UBUNTU_CODENAME=' /etc/os-release || grep -qx 'ID=ubuntu' /etc/os-release ||
+    echo "Warning: this installer is made for Ubuntu and Ubuntu-based systems; continuing anyway." >&2
 
   local deps=(python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml curl tar)
   local missing=() p

@@ -27,6 +27,28 @@ Created by **Lentin Joseph** · [Runtime Robotics](https://runtimerobotics.com)
 | 24.04 | Jazzy |
 | 26.04 | Lyrical |
 
+Ubuntu-based systems work too, because the installer goes by the Ubuntu release they're built on (`UBUNTU_CODENAME`):
+Linux Mint 21 / 22 and Pop!_OS 22.04 / 24.04, for example.
+
+### Desktops and requirements
+
+It works on any desktop on X11 or Wayland: GNOME, KDE Plasma, XFCE, MATE, Cinnamon, LXQt, Budgie.
+It uses GTK4 and libadwaita, so it looks like a GNOME app everywhere but follows light and dark mode.
+
+You need:
+
+- Ubuntu 22.04, 24.04 or 26.04 (any flavor), or a system based on one, on amd64 or arm64
+- a graphical session and a user with admin (sudo) rights
+- internet and about 10 GB of free disk space
+- `python3-gi`, `gir1.2-gtk-4.0`, `gir1.2-adw-1`, `python3-yaml` (the one-line install adds these)
+- a **password helper** (polkit agent) so `pkexec` can ask for your password. GNOME, KDE, XFCE, MATE, Cinnamon, LXQt and Budgie all ship one.
+  Bare window managers like i3 or Sway often don't. The first page of the installer warns you then; install one with `sudo apt install policykit-1-gnome` and start it with your session.
+
+Optional:
+
+- `notify-send` (package `libnotify-bin`) for update notifications
+- a terminal for the **Try it** buttons. It uses your desktop's own terminal: GNOME Terminal or Ptyxis, Konsole, xfce4-terminal, MATE Terminal, QTerminal or LXTerminal. If none of those is installed, it uses the system default terminal.
+
 ## What you can install
 
 First pick **ROS 2 itself**: Desktop or Desktop-Full, plus `ros-dev-tools` and `rosdep`.

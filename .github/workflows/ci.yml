@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1"  # weekly, to catch ROS packages that disappear from apt
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Ubuntu ${{ matrix.ubuntu }}
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.ubuntu }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ["22.04", "24.04", "26.04"]  # Humble, Jazzy, Lyrical
+    env:
+      DEBIAN_FRONTEND: noninteractive
+    steps:
+      - name: Install the GUI's dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates curl \
+            python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-yaml
+
+      - uses: actions/checkout@v4
+
+      # Same steps as helper.sh, so the test checks every catalog package against
+      # the real ROS 2 repository for this Ubuntu version.
+      - name: Add the ROS 2 apt repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+                https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
+                grep -F '"tag_name"' | awk -F'"' '{print $4}')
+          codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+          curl -fsSL -o /tmp/ros2-apt-source.deb \
+            "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ver}/ros2-apt-source_${ver}.${codename}_all.deb"
+          apt-get install -y /tmp/ros2-apt-source.deb
+          apt-get update
+
+      - name: Run the self-test
+        run: python3 test_installer.py
+
+      - name: Check shell scripts parse
+        run: bash -n helper.sh && bash -n install.sh

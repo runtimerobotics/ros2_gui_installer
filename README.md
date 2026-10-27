@@ -1,5 +1,7 @@
 # ROS 2 GUI Installer
 
+[![CI](https://github.com/runtimerobotics/ros2_gui_installer/actions/workflows/ci.yml/badge.svg)](https://github.com/runtimerobotics/ros2_gui_installer/actions/workflows/ci.yml)
+<br>
 [![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
 [![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/24.04/)
 [![Ubuntu 26.04](https://img.shields.io/badge/Ubuntu-26.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/26.04/)
@@ -143,3 +145,7 @@ cd ros2_gui_installer && ./ros2_installer.py
 ```
 
 The test checks the parsers and the helper's name filter. It also checks that every catalog package exists in apt for the ROS 2 version on this machine.
+
+[GitHub Actions](.github/workflows/ci.yml) runs the same test in Ubuntu 22.04, 24.04 and 26.04 containers with the ROS 2 apt repository added. So every push checks the catalog against Humble, Jazzy and Lyrical.
+It also runs every Monday, to catch packages that get removed from apt.
+If a section is expected to be missing for a version, mark it with `not_released_for: [<distro>]` in `catalog.yaml`. The test then fails as soon as that section's packages are released, so you know to remove the marker.

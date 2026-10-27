@@ -75,9 +75,16 @@ with tempfile.TemporaryDirectory() as tmp:
 
 # Every catalog package must exist in the ROS repo for this machine's distro.
 distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
+# Goals marked not_released_for this distro must still be missing something, so the
+# marker gets removed once the packages are released.
 if distro and repo_configured():
     pkgs = catalog_packages(distro)
     missing = set(pkgs) - parse_policy(run(["apt-cache", "policy", *pkgs]))
+    for g in CATALOG["goals"]:
+        if distro in g.get("not_released_for", []):
+            own = set(expand(g["packages"], distro))
+            assert own & missing, f"{g['id']} is now released for {distro}: remove not_released_for"
+            missing -= own
     assert not missing, f"not in apt for {distro}: {sorted(missing)}"
     print(f"catalog OK for {distro} ({len(set(pkgs))} packages)")
 else:

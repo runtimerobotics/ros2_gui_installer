@@ -5,6 +5,7 @@
 # when a distro needs something different. "requires" ticks other goals too.
 # "category" puts a goal in one of the collapsible groups listed under "categories".
 # "demo" is optional: leave it out when a section needs real hardware to show anything.
+# "not_released_for" lists distros where a goal is expected to be greyed out (checked by CI).
 
 distros:            # Ubuntu VERSION_ID -> ROS 2 distro
   "22.04": humble
@@ -63,6 +64,7 @@ goals:
 
   - id: mobile
     category: mobile
+    not_released_for: [lyrical]  # no TurtleBot 4 for Lyrical yet; CI fails once it's released, so remove this then
     title: Drive a mobile robot
     icon: input-gaming-symbolic
     description: TurtleBot 4 in Gazebo, plus SLAM Toolbox for building maps.

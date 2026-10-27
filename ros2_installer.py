@@ -84,6 +84,22 @@ def parse_search(text):
     return {name: desc for name, desc in pairs if not name.endswith("-dbgsym")}
 
 
+def parse_show(text):
+    """{package: one-line description} from `apt-cache show` output."""
+    out, pkg = {}, None
+    for line in text.splitlines():
+        if line.startswith("Package: "):
+            pkg = line[9:]
+        elif line.startswith(("Description: ", "Description-en: ")) and pkg:
+            out[pkg] = line.split(": ", 1)[1]
+    return out
+
+
+def suffix(row, widget):
+    """ExpanderRow.add_suffix is libadwaita 1.4+; 22.04 has 1.1, where it's add_action."""
+    (row.add_suffix if hasattr(row, "add_suffix") else row.add_action)(widget)
+
+
 def parse_print_uris(text):
     """Total download bytes from `apt-get --print-uris -qq install` output."""
     return sum(int(line.split()[2]) for line in text.splitlines() if line.startswith("'"))
@@ -283,32 +299,40 @@ class Installer(Adw.ApplicationWindow):
             self.variant_checks[vid] = check
 
         group = Adw.PreferencesGroup(title="2. What do you want to do?",
-                                     description="Pick any. You can run the installer again to add more.")
+                                     description="Pick any. Tick a category to pick everything in it, "
+                                                 "or press ⓘ to see exactly what gets installed.")
         page.add(group)
         self.goal_checks = {}
+        self.have, self.avail, self.pkg_info = have, avail, {}
+        threading.Thread(target=self.load_descriptions, args=(everything,), daemon=True).start()
         titles = {g["id"]: g["title"] for g in goals}
-        expanders = {}  # category id -> (ExpanderRow, its goals)
+        expanders = {}  # category id -> (ExpanderRow, its goals, its tick box)
         for c in CATALOG["categories"]:
             members = [g for g in goals if g["category"] == c["id"]]
             if members:
-                expanders[c["id"]] = (Adw.ExpanderRow(title=c["title"]), members)
-                group.add(expanders[c["id"]][0])
+                row = Adw.ExpanderRow(title=c["title"])
+                cat_check = Gtk.CheckButton(valign=Gtk.Align.CENTER, tooltip_text="Pick everything in this category")
+                suffix(row, self.info_button(members))
+                suffix(row, cat_check)
+                expanders[c["id"]] = (row, members, cat_check)
+                group.add(row)
         for g in goals:
             pkgs = set(expand(g["packages"], d))
             needed = {p for r in with_required([g["id"]]) for p in expand(r["packages"], d)}
-            check = Gtk.CheckButton()
+            check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
             subtitle = g["description"]
             if g.get("requires"):
                 subtitle += f" Also installs: {', '.join(titles[r] for r in g['requires'])}."
             row = Adw.ActionRow(title=g["title"], subtitle=subtitle)
             row.add_prefix(Gtk.Image(icon_name=g.get("icon", "package-x-generic-symbolic")))
-            row.add_prefix(check)  # prefixes stack right-to-left, so the checkbox ends up leftmost
-            row.set_activatable_widget(check)
             if avail is not None and not needed <= avail:
-                row.set_sensitive(False)
+                check.set_sensitive(False)  # only the tick box, so ⓘ still shows what's missing
                 row.set_subtitle(f"Not available for ROS 2 {d.title()} yet")
             elif pkgs <= have:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
+            row.add_suffix(self.info_button([g]))
+            row.add_suffix(check)
+            row.set_activatable_widget(check)
             expanders[g["category"]][0].add_row(row)
             self.goal_checks[g["id"]] = check
         for g in goals:  # ticking a goal ticks what it requires, so the screen matches what gets installed
@@ -316,15 +340,36 @@ class Installer(Adw.ApplicationWindow):
                 self.goal_checks[g["id"]].connect(
                     "toggled", lambda c, req=req: c.get_active() and self.goal_checks[req].set_active(True))
 
+        syncing = False  # True while refresh() sets a category box, so that doesn't re-tick its sections
+
         def refresh(cat):
             """Collapsed rows still show what's inside and how many are ticked."""
-            row, members = expanders[cat]
-            picked = sum(self.goal_checks[m["id"]].get_active() for m in members)
+            nonlocal syncing
+            row, members, cat_check = expanders[cat]
+            checks = [self.goal_checks[m["id"]] for m in members]
+            usable = [c for c in checks if c.get_sensitive()]
+            picked = sum(c.get_active() for c in checks)
             summary = ", ".join(m["title"] for m in members)
             row.set_subtitle(f"{picked} selected · {summary}" if picked else summary)
+            syncing = True
+            cat_check.set_sensitive(bool(usable))
+            cat_check.set_active(bool(usable) and all(c.get_active() for c in usable))
+            cat_check.set_inconsistent(0 < picked and not cat_check.get_active())
+            syncing = False
+
+        def on_category_toggled(cat_check, cat):
+            if not syncing:
+                want = cat_check.get_active()  # read once: each section toggle below re-syncs cat_check
+                for m in expanders[cat][1]:
+                    check = self.goal_checks[m["id"]]
+                    if check.get_sensitive():
+                        check.set_active(want)
+                refresh(cat)
+
         for g in goals:
             self.goal_checks[g["id"]].connect("toggled", lambda _c, cat=g["category"]: refresh(cat))
-        for cat in expanders:
+        for cat, (_row, _members, cat_check) in expanders.items():
+            cat_check.connect("toggled", on_category_toggled, cat)
             refresh(cat)
 
         terminal = Adw.PreferencesGroup(title="3. Terminal")
@@ -351,6 +396,48 @@ class Installer(Adw.ApplicationWindow):
         extra.add(self.manual_row)
         page.add(extra)
         self.replace_page("choose", page)
+
+    def load_descriptions(self, pkgs):
+        self.pkg_info = parse_show(run(["apt-cache", "show", "--no-all-versions", *pkgs]))
+
+    def info_button(self, goals):
+        """ⓘ button whose popover lists what the given sections install."""
+        button = Gtk.MenuButton(icon_name="help-about-symbolic", valign=Gtk.Align.CENTER,
+                                tooltip_text="What's included", css_classes=["flat"])
+        button.set_create_popup_func(lambda b: b.set_popover(self.info_popover(goals)))  # built when opened
+        return button
+
+    def info_popover(self, goals):
+        d = self.distro
+        titles = {g["id"]: g["title"] for g in CATALOG["goals"]}
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4,
+                      margin_top=8, margin_bottom=8, margin_start=8, margin_end=8)
+
+        def label(text, *classes, **kw):
+            box.append(Gtk.Label(label=text, xalign=0, wrap=True, max_width_chars=60,
+                                 css_classes=list(classes), **kw))
+
+        for i, g in enumerate(goals):
+            if len(goals) > 1:
+                label(g["title"], "heading", margin_top=8 * (i > 0))
+            label(g["description"], "dim-label")
+            if g.get("requires"):
+                label("Also installs: " + ", ".join(titles[r] for r in g["requires"]))
+            for pkg in expand(g["packages"], d):
+                if pkg in self.have:
+                    state = "✓ installed"
+                elif self.avail is not None and pkg not in self.avail:
+                    state = f"✗ not released for {d.title()}"
+                else:
+                    state = "will be installed"
+                label(f"{pkg}  ({state})", "monospace", margin_top=4)
+                if pkg in self.pkg_info:
+                    label(self.pkg_info[pkg], "dim-label", "caption", margin_start=12)
+            if "demo" in g:
+                label(f"Try it: {for_distro(g['demo']['command'], d)}", "caption", margin_top=6)
+        scroller = Gtk.ScrolledWindow(child=box, max_content_height=460, propagate_natural_height=True,
+                                      propagate_natural_width=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
+        return Gtk.Popover(child=scroller)
 
     def build_network_group(self, saved):
         group = Adw.PreferencesGroup(

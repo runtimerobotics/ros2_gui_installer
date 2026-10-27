@@ -53,6 +53,9 @@ Then add any of these sections, grouped into collapsible categories:
 | **Connect to other tools** | Connect from a browser or other tools | rosbridge, Foxglove bridge |
 | **Developer tools** | Build, test and debug your own packages | ament linters, clang-format, launch testing, `generate_parameter_library`, tracing, SROS2 |
 
+Each category row has a tick box on the right that picks everything in it, so you don't have to expand it.
+Press **ⓘ** on a category or section to see exactly what it installs: every package with its description, whether you already have it, and the demo command.
+
 Some sections need another one: Nav2, both TurtleBots and the arm need Simulate robots, and More arm tools needs MoveIt 2.
 Ticking a section ticks what it needs.
 If a section isn't released yet for your ROS 2 version, it shows greyed out.

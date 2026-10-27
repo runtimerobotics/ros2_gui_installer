@@ -31,13 +31,16 @@ base:
     command: ros2 run demo_nodes_cpp talker
 
 categories:         # shown in this order on the choose page
+  - {id: learn, title: Learn ROS 2}
   - {id: simulate, title: Simulate}
   - {id: models, title: Robot models}
   - {id: tools, title: See and record}
   - {id: sensors, title: Sensors and cameras}
   - {id: mobile, title: Mobile robots and navigation}
   - {id: arms, title: Robot arms}
+  - {id: behavior, title: Behavior and task logic}
   - {id: connect, title: Connect to other tools}
+  - {id: dev, title: Developer tools}
 
 goals:
   - id: simulation
@@ -267,6 +270,92 @@ goals:
       command:
         default: ros2 launch moveit_servo demo_twist.launch.py
         humble: ros2 launch moveit_servo servo_example.launch.py
+
+  - id: learn
+    category: learn
+    title: Tutorials and examples
+    icon: help-browser-symbolic
+    description: The packages the official ROS 2 tutorials use, including turtlesim, minimal C++ and Python nodes, actions, TF2 and lifecycle nodes.
+    packages:
+      - ros-{distro}-turtlesim
+      - ros-{distro}-demo-nodes-py
+      - ros-{distro}-examples-rclcpp-minimal-publisher
+      - ros-{distro}-examples-rclcpp-minimal-subscriber
+      - ros-{distro}-examples-rclpy-minimal-publisher
+      - ros-{distro}-examples-rclpy-minimal-subscriber
+      - ros-{distro}-action-tutorials-cpp
+      - ros-{distro}-action-tutorials-py
+      - ros-{distro}-turtle-tf2-py
+      - ros-{distro}-turtle-tf2-cpp
+      - ros-{distro}-lifecycle-py
+    demo:
+      title: Two turtles following each other with TF2
+      command: ros2 launch turtle_tf2_py turtle_tf2_demo.launch.py
+
+  - id: turtlebot3
+    category: mobile
+    title: TurtleBot 3
+    icon: input-gaming-symbolic
+    description: The classic beginner robot used in many courses, with Gazebo worlds and keyboard teleop.
+    requires: [simulation]
+    packages:
+      default:
+        - ros-{distro}-turtlebot3
+        - ros-{distro}-turtlebot3-simulations
+      lyrical:  # only the simulation packages are released for Lyrical so far
+        - ros-{distro}-turtlebot3-simulations
+    demo:
+      title: TurtleBot 3 in a Gazebo world
+      command: export TURTLEBOT3_MODEL=burger && ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+
+  - id: rtabmap
+    category: mobile
+    title: 3D mapping (RTAB-Map)
+    icon: mark-location-symbolic
+    description: RTAB-Map builds 3D maps and localizes with RGB-D cameras, stereo cameras or LiDAR.
+    packages:
+      - ros-{distro}-rtabmap-ros
+
+  - id: markers
+    category: sensors
+    title: Markers and AprilTags
+    icon: view-grid-symbolic
+    description: Detect AprilTags and ArUco markers in camera images to find their position and orientation.
+    packages:
+      - ros-{distro}-apriltag-ros
+      - ros-{distro}-aruco-opencv
+
+  - id: behavior
+    category: behavior
+    title: Behavior trees and state machines
+    icon: view-list-symbolic
+    description: BehaviorTree.CPP (used by Nav2), py_trees with tutorials, SMACH and FlexBE.
+    packages:
+      - ros-{distro}-behaviortree-cpp
+      - ros-{distro}-py-trees-ros
+      - ros-{distro}-py-trees-ros-tutorials
+      - ros-{distro}-smach-ros
+      - ros-{distro}-flexbe-behavior-engine
+    demo:
+      title: A behavior tree checking a mock robot's battery
+      command: ros2 launch py_trees_ros_tutorials tutorial_two_battery_check_launch.py
+
+  - id: devtools
+    category: dev
+    title: Build, test and debug your own packages
+    icon: applications-engineering-symbolic
+    description: Linters and code formatting, launch tests, generate_parameter_library, tracing, and SROS2 security tools.
+    packages:
+      - ros-{distro}-ament-lint-auto
+      - ros-{distro}-ament-lint-common
+      - ros-{distro}-ament-cmake-clang-format
+      - ros-{distro}-launch-testing-ament-cmake
+      - ros-{distro}-generate-parameter-library
+      - ros-{distro}-tracetools-launch
+      - ros-{distro}-sros2
+    demo:
+      title: Check your ROS 2 setup with ros2 doctor
+      command: ros2 doctor --report
 
 # Network settings page. Saved to ~/.config/ros2-gui-installer/env.sh, which ~/.bashrc loads.
 network:

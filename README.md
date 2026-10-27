@@ -16,22 +16,28 @@ Then add any of these sections, grouped into collapsible categories:
 
 | Category | Section | Main packages |
 |---|---|---|
+| **Learn ROS 2** | Tutorials and examples | `turtlesim`, minimal C++/Python nodes, action and TF2 tutorials, lifecycle demo |
 | **Simulate** | Simulate robots | Gazebo, `ros_gz`, `ros2_control` |
 | **Robot models** | Describe your own robot (URDF) | `urdf_tutorial`, `xacro`, `robot_state_publisher`, `joint_state_publisher_gui` |
 | **See and record** | Visualize and debug | rqt plugins, `rqt_tf_tree`, `tf2_tools`, diagnostics, `rviz_visual_tools` |
 | | Record and replay data | `rosbag2` + MCAP, `rqt_bag`, PlotJuggler |
 | **Sensors and cameras** | Use cameras | `vision_opencv`, `image_pipeline`, `v4l2_camera`, RealSense |
+| | Markers and AprilTags | `apriltag_ros`, `aruco_opencv` |
 | | Use LiDAR, IMU and GPS | Velodyne, Hokuyo (`urg_node`), `imu_tools`, `nmea_navsat_driver`, `pcl_ros` |
 | **Mobile robots and navigation** | Drive a mobile robot | TurtleBot 4 simulation, SLAM Toolbox |
 | | Navigate on its own | Nav2 |
 | | Drive with keyboard or gamepad | `teleop_twist_keyboard`, `teleop_twist_joy`, `joy` |
 | | Know where the robot is | `robot_localization`, AMCL, Cartographer |
+| | TurtleBot 3 | `turtlebot3`, Gazebo worlds |
+| | 3D mapping | RTAB-Map |
 | **Robot arms** | Control a robot arm | Universal Robots in Gazebo |
 | | Plan arm motion | MoveIt 2 with the Panda demo |
 | | More arm tools | MoveIt Servo, `moveit_py`, CHOMP, `pick_ik`, Robotiq gripper |
+| **Behavior and task logic** | Behavior trees and state machines | BehaviorTree.CPP, `py_trees_ros` + tutorials, SMACH, FlexBE |
 | **Connect to other tools** | Connect from a browser or other tools | rosbridge, Foxglove bridge |
+| **Developer tools** | Build, test and debug your own packages | ament linters, clang-format, launch testing, `generate_parameter_library`, tracing, SROS2 |
 
-Some sections need another one: Nav2, the mobile robot and the arm need Simulate robots, and More arm tools needs MoveIt 2.
+Some sections need another one: Nav2, both TurtleBots and the arm need Simulate robots, and More arm tools needs MoveIt 2.
 Ticking a section ticks what it needs.
 If a section isn't released yet for your ROS 2 version, it shows greyed out.
 When a package is missing for one version (for example PlotJuggler or Cartographer on Lyrical), that version gets the rest of the section without it.

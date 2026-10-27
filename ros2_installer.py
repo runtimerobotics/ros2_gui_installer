@@ -24,7 +24,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.1.1"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.1.2"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
@@ -71,6 +71,18 @@ def with_required(goal_ids):
             wanted.add(gid)
             todo += by_id[gid].get("requires", [])
     return [g for g in CATALOG["goals"] if g["id"] in wanted]
+
+
+def usable_goals(distro, avail):
+    """Ids of sections that can be installed: everything they need is released for this distro.
+    Before the ROS repo is added apt knows no ROS packages (avail is None), so the catalog's
+    not_released_for list is the only guide then."""
+    def ok(g):
+        chain = with_required([g["id"]])
+        if any(distro in r.get("not_released_for", []) for r in chain):
+            return False
+        return avail is None or {p for r in chain for p in expand(r["packages"], distro)} <= avail
+    return {g["id"] for g in CATALOG["goals"] if ok(g)}
 
 
 def installed(pkgs):
@@ -172,7 +184,7 @@ def check_updates():
     pkgs = upgradable(distro) if distro else []
     print(f"{len(pkgs)} ROS 2 package updates ready")
     if pkgs and shutil.which("notify-send"):
-        subprocess.run(["notify-send", "--app-name=ROS 2 Installer", "--icon=system-software-update",
+        subprocess.run(["notify-send", "--app-name=ROS 2 Installer", f"--icon={APP_ID}",
                         "ROS 2 updates are ready",
                         f"{len(pkgs)} ROS 2 package{'s' * (len(pkgs) > 1)} can be updated. "
                         "Open ROS 2 Installer to update."])
@@ -269,6 +281,8 @@ class Installer(Adw.ApplicationWindow):
         super().__init__(application=app, title="ROS 2 Installer", default_width=760, default_height=680)
         self.distro = detect_distro()
         self.blockers = set()
+        self.installing = False
+        self.connect("close-request", self.on_close_request)
         self.total = 0
 
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, vexpand=True)
@@ -294,6 +308,12 @@ class Installer(Adw.ApplicationWindow):
         if self.distro:
             self.build_choose_page()
         self.show_page("check")
+
+    def on_close_request(self, _window):
+        """Closing mid-install would cut apt off (its output pipe closes) and can leave dpkg half done."""
+        if self.installing:
+            self.status.set_label("Please wait until the install finishes. Closing now could leave apt half done.")
+        return self.installing  # True keeps the window open
 
     def show_about(self):
         credits = dict(copyright="© 2026 Lentin Joseph, Runtime Robotics", website="https://runtimerobotics.com",
@@ -440,9 +460,7 @@ class Installer(Adw.ApplicationWindow):
         page.add(group)
         self.have, self.avail, self.pkg_info = have, avail, {}
         threading.Thread(target=self.load_descriptions, args=(everything,), daemon=True).start()
-        # A section is usable when its packages, and those of the sections it needs, are released.
-        self.usable = {g["id"] for g in goals if avail is None
-                       or {p for r in with_required([g["id"]]) for p in expand(r["packages"], d)} <= avail}
+        self.usable = usable_goals(d, avail)
         self.cat_members, self.cat_checks = {}, {}
         for c in CATALOG["categories"]:
             members = [g for g in goals if g["category"] == c["id"]]
@@ -800,6 +818,7 @@ class Installer(Adw.ApplicationWindow):
             page.append(w)
         self.replace_page("install", page)
         self.show_page("install")
+        self.installing = True
         threading.Thread(target=self.install_worker, args=(pkgs,), daemon=True).start()
 
     def stream(self, cmd):
@@ -853,6 +872,7 @@ class Installer(Adw.ApplicationWindow):
             self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
     def on_finished(self, code):
+        self.installing = False
         if code == 0:
             self.progress.set_fraction(1)
             self.build_done_page()

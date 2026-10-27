@@ -27,20 +27,26 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # Same steps as helper.sh, so the test checks every catalog package against
-      # the real ROS 2 repository for this Ubuntu version.
-      - name: Add the ROS 2 apt repository
-        env:
-          GH_TOKEN: ${{ github.token }}
+      # Run the real root helper the way the app does, on a machine with the problems it must survive:
+      # an old-style ROS 2 source (the pre-2025 layout) and a dead third-party repository.
+      - name: Set up an old ROS 2 source and a broken repository
+        shell: bash
         run: |
-          ver=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
-                https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
-                grep -F '"tag_name"' | awk -F'"' '{print $4}')
           codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-          curl -fsSL -o /tmp/ros2-apt-source.deb \
-            "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ver}/ros2-apt-source_${ver}.${codename}_all.deb"
-          apt-get install -y /tmp/ros2-apt-source.deb
-          apt-get update
+          echo "deb [signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $codename main" \
+            > /etc/apt/sources.list.d/ros2.list
+          echo "deb http://ppa.launchpadcontent.net/nonexistent-team/nonexistent/ubuntu $codename main" \
+            > /etc/apt/sources.list.d/broken-ppa.list
+
+      - name: Install turtlesim with the real helper
+        shell: bash
+        run: |
+          distro=$(python3 -c "import ros2_installer as r; print(r.detect_distro())")
+          ./helper.sh install "ros-$distro-turtlesim" | tee /tmp/helper.log
+          test -d "/opt/ros/$distro/share/turtlesim"                          # installed
+          test ! -e /etc/apt/sources.list.d/ros2.list                          # old source switched off
+          test -e /etc/apt/sources.list.d/ros2.list.disabled-by-ros2-installer
+          grep -q '^pmstatus:' /tmp/helper.log                                 # progress bar input arrived
 
       - name: Run the self-test
         run: python3 test_installer.py

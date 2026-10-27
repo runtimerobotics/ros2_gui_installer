@@ -8,7 +8,7 @@ from pathlib import Path
 import ros2_installer
 
 from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, detect_distro, expand, for_distro, network_env,
-                            parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, with_required,
+                            parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
 POLICY = """ros-jazzy-ros-gz:
@@ -90,6 +90,13 @@ with tempfile.TemporaryDirectory() as tmp:
                           f"{ENV_SOURCE_LINE}; echo $ROS_DOMAIN_ID $RMW_IMPLEMENTATION"],
                          capture_output=True, text=True).stdout.split()
     assert out == ["42", "rmw_zenoh_cpp"], out
+
+# A section not released for a distro is never offered there, even on a fresh machine where
+# apt doesn't know any ROS packages yet (avail is None).
+assert "mobile" not in usable_goals("lyrical", None)
+assert "mobile" in usable_goals("jazzy", None)
+assert "nav2" in usable_goals("lyrical", None)  # needs Simulate, which is released
+assert "mobile" not in usable_goals("jazzy", set())  # apt knows nothing is available
 
 # Distro detection uses the Ubuntu codename, so Ubuntu-based systems map to their base release.
 assert detect_distro({"ID": "ubuntu", "VERSION_ID": "24.04", "VERSION_CODENAME": "noble", "UBUNTU_CODENAME": "noble"}) == "jazzy"

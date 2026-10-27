@@ -24,23 +24,38 @@ done
 export DEBIAN_FRONTEND=noninteractive
 apt=(apt-get -y -o DPkg::Lock::Timeout=120)   # wait for other apt users instead of failing
 
-if ! grep -Rqs packages.ros.org /etc/apt/sources.list /etc/apt/sources.list.d; then
+# The ros2-apt-source package sets up the ROS 2 repository and its signing key. It's the only
+# check that counts: older setups (ros2.list plus a signing key that expired in 2025) get it too.
+if ! dpkg -s ros2-apt-source >/dev/null 2>&1; then
   step "Adding the ROS 2 package repository"
   "${apt[@]}" install software-properties-common curl
   # Ubuntu-based systems like Linux Mint already have universe and their own add-apt-repository
   add-apt-repository -y universe || echo "Couldn't enable universe; continuing (it's usually already on)."
-  ver=$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
-        grep -F '"tag_name"' | awk -F'"' '{print $4}')
+  # releases/latest redirects to .../releases/tag/<version> with no rate limit (a classroom shares
+  # one IP); GitHub's API allows 60 requests an hour, so it's only the fallback.
+  src=https://github.com/ros-infrastructure/ros-apt-source
+  ver=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$src/releases/latest" | sed -n 's#.*/releases/tag/##p')
+  [ -n "$ver" ] || ver=$(curl -fsSL https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest |
+                         grep -F '"tag_name"' | awk -F'"' '{print $4}')
   [ -n "$ver" ] || { echo "Could not reach GitHub to find the ROS 2 repository package." >&2; exit 1; }
   codename=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
   deb=$(mktemp --suffix=.deb)
-  curl -fsSL -o "$deb" "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ver}/ros2-apt-source_${ver}.${codename}_all.deb"
+  curl -fsSL -o "$deb" "$src/releases/download/${ver}/ros2-apt-source_${ver}.${codename}_all.deb"
   dpkg -i "$deb"
   rm -f "$deb"
 fi
+# Old-style ROS 2 sources clash with the package's key, so switch them off (renamed, not deleted).
+for f in /etc/apt/sources.list.d/*.list; do
+  if [ -f "$f" ] && grep -q '^[^#]*packages\.ros\.org/ros2' "$f"; then
+    mv "$f" "$f.disabled-by-ros2-installer"
+    echo "Turned off the old ROS 2 source $f (now $f.disabled-by-ros2-installer)"
+  fi
+done
 
 step "Updating package lists"
-"${apt[@]}" update
+# A broken third-party repository (an old PPA, an expired key) makes this fail even when the ROS
+# lists arrive fine; carry on, and let the install itself fail if the ROS lists are really missing.
+"${apt[@]}" update || echo "Some package lists couldn't be refreshed (see above); carrying on with the ones that worked."
 # dlstatus:/pmstatus: lines from APT::Status-Fd drive the GUI progress bar
 if [ ${#new[@]} -gt 0 ]; then
   step "Installing packages"

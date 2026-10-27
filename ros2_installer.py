@@ -18,7 +18,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
@@ -78,9 +78,24 @@ def parse_policy(text):
     return found
 
 
+def parse_search(text):
+    """{package: description} from `apt-cache search` output, without debug-symbol packages."""
+    pairs = (line.split(" - ", 1) for line in text.splitlines() if " - " in line)
+    return {name: desc for name, desc in pairs if not name.endswith("-dbgsym")}
+
+
 def parse_print_uris(text):
     """Total download bytes from `apt-get --print-uris -qq install` output."""
     return sum(int(line.split()[2]) for line in text.splitlines() if line.startswith("'"))
+
+
+STATUS_LINE = re.compile(r"^(dl|pm)status:.*?:(\d+(?:\.\d+)?):(.*)$")
+
+
+def parse_status(line):
+    """(kind 'dl'|'pm', percent, description) from an apt Status-Fd line, else None."""
+    m = STATUS_LINE.match(line.rstrip("\n"))
+    return (m[1], float(m[2]), m[3]) if m else None
 
 
 def repo_configured():
@@ -130,7 +145,7 @@ class Installer(Adw.ApplicationWindow):
         super().__init__(application=app, title="ROS 2 Installer", default_width=760, default_height=680)
         self.distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
         self.blockers = set()
-        self.total = self.done = 0
+        self.total = 0
 
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.SLIDE_LEFT_RIGHT, vexpand=True)
         self.back = Gtk.Button(label="Back")
@@ -160,18 +175,18 @@ class Installer(Adw.ApplicationWindow):
 
     def show_page(self, name):
         self.stack.set_visible_child_name(name)
-        self.back.set_visible(name in ("choose", "review"))
+        self.back.set_visible(name in ("choose", "review", "packages"))
         self.next.set_visible(name != "install")
-        self.next.set_label({"review": "Install", "done": "Close"}.get(name, "Next"))
+        self.next.set_label({"review": "Install", "done": "Close", "packages": "Done"}.get(name, "Next"))
         self.next.set_sensitive(not (name == "check" and self.blockers))
 
     def on_back(self):
         page = self.stack.get_visible_child_name()
-        self.show_page({"choose": "check", "review": "choose", "install": "review"}[page])
+        self.show_page({"choose": "check", "review": "choose", "install": "review", "packages": "choose"}[page])
 
     def on_next(self):
         page = self.stack.get_visible_child_name()
-        if page == "check":
+        if page in ("check", "packages"):
             self.show_page("choose")
         elif page == "choose":
             self.build_review_page()
@@ -325,6 +340,16 @@ class Installer(Adw.ApplicationWindow):
         terminal.add(row)
 
         page.add(self.build_network_group(read_env()))
+
+        self.manual = set()  # individually picked packages
+        extra = Adw.PreferencesGroup(title="5. Individual packages",
+                                     description="For when you know exactly which ROS 2 package you need.")
+        self.manual_row = Adw.ActionRow(title="Pick individual packages", subtitle="Search every ROS 2 package",
+                                        activatable=True)
+        self.manual_row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+        self.manual_row.connect("activated", lambda _r: self.open_packages())
+        extra.add(self.manual_row)
+        page.add(extra)
         self.replace_page("choose", page)
 
     def build_network_group(self, saved):
@@ -372,12 +397,106 @@ class Installer(Adw.ApplicationWindow):
         goals = with_required(gid for gid, c in self.goal_checks.items() if c.get_active())
         titles = [f"ROS 2 {variant['title']}"] + [g["title"] for g in goals]
         pkgs = expand(variant["packages"], self.distro) + [p for g in goals for p in expand(g["packages"], self.distro)]
+        if self.manual:
+            titles.append(f"{len(self.manual)} individual package{'s' * (len(self.manual) > 1)}")
+            pkgs += sorted(self.manual)
         env, rmw_pkg = self.network_choice()
         if env:
             titles.append("Network: " + ", ".join(f"{k}={v}" for k, v in env.items()))
         if rmw_pkg:
             pkgs.append(rmw_pkg)
         return titles, list(dict.fromkeys(pkgs))
+
+    # ---- individual packages ----
+
+    def open_packages(self):
+        if not self.stack.get_child_by_name("packages"):
+            spinner = Adw.StatusPage(title="Loading the package list…")
+            self.replace_page("packages", spinner)
+
+            def load():
+                names = parse_search(run(["apt-cache", "search", "--names-only", f"^ros-{self.distro}-"]))
+                have = installed([f"ros-{self.distro}-*"])
+                GLib.idle_add(self.build_packages_page, names, have)
+            threading.Thread(target=load, daemon=True).start()
+        self.show_page("packages")
+
+    def build_packages_page(self, descriptions, have):
+        if not descriptions:
+            self.replace_page("packages", Adw.StatusPage(
+                icon_name="dialog-information-symbolic", title="No package list yet",
+                description="Install ROS 2 itself first (go back and press Next), then run the installer again."))
+            self.show_page("packages")
+            return
+        self.pkg_desc, self.pkg_installed, self.query = descriptions, have, []
+        # Search matches the start of words, so "imu" finds imu-tools but not "simulation".
+        self.pkg_words = {n: re.findall(r"[a-z0-9]+", f"{n} {d}".lower()) for n, d in descriptions.items()}
+        search = Gtk.SearchEntry(placeholder_text=f"Search {len(descriptions):,} packages, e.g. joy, lidar, moveit")
+        self.picked_label = Gtk.Label(xalign=0, css_classes=["dim-label"])
+        self.update_picked()
+        pkg_filter = Gtk.CustomFilter.new(self.package_matches)
+
+        def on_search(entry):
+            self.query = entry.get_text().lower().split()
+            pkg_filter.changed(Gtk.FilterChange.DIFFERENT)
+        search.connect("search-changed", on_search)
+
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self.setup_package_row)
+        factory.connect("bind", self.bind_package_row)
+        model = Gtk.FilterListModel(model=Gtk.StringList.new(sorted(descriptions)), filter=pkg_filter)
+        view = Gtk.ListView(model=Gtk.NoSelection(model=model), factory=factory)
+
+        page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
+                       margin_top=12, margin_bottom=12, margin_start=12, margin_end=12)
+        page.append(search)
+        page.append(self.picked_label)
+        page.append(Gtk.ScrolledWindow(child=view, vexpand=True))
+        self.replace_page("packages", page)
+        self.show_page("packages")
+        search.grab_focus()
+
+    def package_matches(self, item):
+        words = self.pkg_words[item.get_string()]
+        return all(any(w.startswith(q) for w in words) for q in self.query)
+
+    def setup_package_row(self, _factory, list_item):
+        name = Gtk.Label(xalign=0)
+        desc = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END, css_classes=["dim-label", "caption"])
+        labels = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, hexpand=True)
+        labels.append(name)
+        labels.append(desc)
+        check = Gtk.CheckButton(child=labels, margin_top=4, margin_bottom=4)  # clicking the text ticks it too
+        check.connect("toggled", self.on_package_toggled)
+        row = Gtk.Box(spacing=12)
+        row.append(check)
+        row.append(Gtk.Label(label="Installed", css_classes=["dim-label"]))
+        list_item.set_child(row)
+
+    def bind_package_row(self, _factory, list_item):
+        # Rows are recycled while scrolling, so every bind re-labels the widgets for its package.
+        row = list_item.get_child()
+        check, badge = row.get_first_child(), row.get_last_child()
+        pkg = list_item.get_item().get_string()
+        labels = check.get_child()
+        labels.get_first_child().set_label(pkg)
+        labels.get_last_child().set_label(self.pkg_desc[pkg])
+        check.pkg = None  # stops on_package_toggled from reacting to the set_active below
+        check.set_active(pkg in self.manual or pkg in self.pkg_installed)
+        check.set_sensitive(pkg not in self.pkg_installed)
+        badge.set_visible(pkg in self.pkg_installed)
+        check.pkg = pkg
+
+    def on_package_toggled(self, check):
+        if getattr(check, "pkg", None):
+            (self.manual.add if check.get_active() else self.manual.discard)(check.pkg)
+            self.update_picked()
+
+    def update_picked(self):
+        n = len(self.manual)
+        text = f"{n} picked: {', '.join(sorted(self.manual))}" if n else "Nothing picked yet"
+        self.picked_label.set_label(text)
+        self.manual_row.set_subtitle(f"{n} picked" if n else "Search every ROS 2 package")
 
     # ---- 3. review ----
 
@@ -427,12 +546,12 @@ class Installer(Adw.ApplicationWindow):
         _titles, pkgs = self.selection()
         self.want_bashrc = self.bashrc_check.get_active() and self.bashrc_check.get_sensitive()
         self.net_env = self.network_choice()[0]
-        self.done = 0
+        self.saw_download = False
 
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                        margin_top=24, margin_bottom=24, margin_start=24, margin_end=24)
         self.status = Gtk.Label(label="Waiting for your password…", wrap=True, css_classes=["title-3"])
-        self.progress = Gtk.ProgressBar()
+        self.progress = Gtk.ProgressBar(show_text=True, text="")
         self.log = Gtk.TextView(editable=False, monospace=True, wrap_mode=Gtk.WrapMode.WORD_CHAR)
         self.log_end = self.log.get_buffer().create_mark(None, self.log.get_buffer().get_end_iter(), False)
         scroller = Gtk.ScrolledWindow(child=self.log, vexpand=True, min_content_height=240)
@@ -471,16 +590,26 @@ class Installer(Adw.ApplicationWindow):
         GLib.idle_add(self.on_finished, code)
 
     def on_line(self, line):
+        status = parse_status(line)
+        if status:
+            # Downloading fills the first half of the bar and installing the second half.
+            # When everything is already downloaded, installing gets the whole bar.
+            kind, pct, desc = status
+            if kind == "dl":
+                self.saw_download = True
+                fraction = pct / 200
+            else:
+                fraction = 0.5 + pct / 200 if self.saw_download else pct / 100
+            self.progress.set_fraction(min(max(fraction, self.progress.get_fraction()), 1))
+            self.progress.set_text(f"{desc} ({fraction:.0%})")
+            return  # status lines are for the bar, not the log
         buf = self.log.get_buffer()
         buf.insert(buf.get_end_iter(), line)
         self.log.scroll_mark_onscreen(self.log_end)
         if line.startswith("##STEP "):
             self.status.set_label(line[7:].strip() + "…")
-        elif line.startswith("Setting up ") and self.total:
-            self.done += 1
-            self.progress.set_fraction(min(self.done / self.total, 1))
-        elif not self.total:
-            self.progress.pulse()
+        elif self.progress.get_fraction() == 0:
+            self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
     def on_finished(self, code):
         if code == 0:

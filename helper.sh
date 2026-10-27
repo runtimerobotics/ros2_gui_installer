@@ -35,7 +35,7 @@ fi
 step "Updating package lists"
 "${apt[@]}" update
 step "Installing packages"
-"${apt[@]}" install "$@"
+"${apt[@]}" -o APT::Status-Fd=1 install "$@"   # dlstatus:/pmstatus: lines drive the GUI progress bar
 
 if command -v rosdep >/dev/null && [ ! -e /etc/ros/rosdep/sources.list.d/20-default.list ]; then
   step "Setting up rosdep"

@@ -7,7 +7,7 @@ from pathlib import Path
 import ros2_installer
 
 from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, expand, for_distro, network_env, os_release,
-                            parse_policy, parse_print_uris, read_env, repo_configured, run, with_required,
+                            parse_policy, parse_print_uris, parse_search, parse_status, read_env, repo_configured, run, with_required,
                             write_env)
 
 POLICY = """ros-jazzy-ros-gz:
@@ -20,6 +20,13 @@ ros-jazzy-missing:
 assert parse_policy(POLICY) == {"ros-jazzy-ros-gz"}
 assert parse_print_uris("'http://x/a.deb' a.deb 100 MD5Sum:1\n'http://x/b.deb' b.deb 23 MD5Sum:2\n") == 123
 assert parse_print_uris("") == 0
+assert parse_search("ros-jazzy-joy - ROS 2 driver - joysticks\nros-jazzy-joy-dbgsym - debug symbols\n") == {
+    "ros-jazzy-joy": "ROS 2 driver - joysticks"}
+# apt Status-Fd lines (dlstatus captured from a real download; pmstatus as apt documents it)
+assert parse_status("dlstatus:3:67.6379:Retrieving file 3 of 4\n") == ("dl", 67.6379, "Retrieving file 3 of 4")
+assert parse_status("pmstatus:ros-jazzy-joy:40:Installing ros-jazzy-joy (amd64)") == ("pm", 40.0, "Installing ros-jazzy-joy (amd64)")
+assert parse_status("pmstatus:libfoo:amd64:12.5:Unpacking libfoo:amd64") == ("pm", 12.5, "Unpacking libfoo:amd64")
+assert parse_status("Setting up ros-jazzy-joy ...") is None
 
 
 def helper_accepts(*pkgs):

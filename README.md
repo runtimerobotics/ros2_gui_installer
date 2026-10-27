@@ -37,6 +37,14 @@ If a section isn't released yet for your ROS 2 version, it shows greyed out.
 When a package is missing for one version (for example PlotJuggler or Cartographer on Lyrical), that version gets the rest of the section without it.
 After installing, the **Try it** page opens a terminal running a demo for each section you installed.
 
+### Individual packages
+
+Already know which package you need? Open **5. Individual packages → Pick individual packages** on the choose page.
+It lists every `ros-<distro>-*` package in the ROS 2 repository (about 2,000 for Jazzy, without debug-symbol packages).
+Search by any word in the name or description (`imu`, `lidar`, `moveit servo`), then tick the packages you want.
+Packages you already have are marked **Installed**.
+The packages you pick go into the same install as the sections above.
+
 ### Network settings (for classrooms and labs)
 
 The installer can also change three network settings:

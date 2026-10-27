@@ -18,11 +18,12 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk, Pango  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
+REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked
 ENV_FILE = Path.home() / ".config" / "ros2-gui-installer" / "env.sh"
 ENV_SOURCE_LINE = '[ -f "$HOME/.config/ros2-gui-installer/env.sh" ] && source "$HOME/.config/ros2-gui-installer/env.sh"'
@@ -223,7 +224,13 @@ class Installer(Adw.ApplicationWindow):
         self.next.connect("clicked", lambda _b: self.on_next())
         header = Adw.HeaderBar()
         header.pack_start(self.back)
+        menu = Gio.Menu()
+        menu.append("About ROS 2 Installer", "win.about")
+        header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
         header.pack_end(self.next)
+        about = Gio.SimpleAction.new("about", None)
+        about.connect("activate", lambda *_: self.show_about())
+        self.add_action(about)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(header)
         box.append(self.stack)
@@ -233,6 +240,19 @@ class Installer(Adw.ApplicationWindow):
         if self.distro:
             self.build_choose_page()
         self.show_page("check")
+
+    def show_about(self):
+        credits = dict(copyright="© 2026 Lentin Joseph, Runtime Robotics", website="https://runtimerobotics.com")
+        if hasattr(Adw, "AboutDialog"):  # libadwaita 1.5+ (Ubuntu 24.04 and later)
+            Adw.AboutDialog(application_name="ROS 2 Installer", application_icon="system-software-install",
+                            developer_name="Lentin Joseph", developers=["Lentin Joseph https://runtimerobotics.com"],
+                            comments="A beginner-friendly installer for ROS 2 on Ubuntu.",
+                            issue_url=f"{REPO_URL}/issues", **credits).present(self)
+        else:  # Ubuntu 22.04's libadwaita 1.1 has no About dialog
+            Gtk.AboutDialog(transient_for=self, modal=True, program_name="ROS 2 Installer",
+                            logo_icon_name="system-software-install", authors=["Lentin Joseph"],
+                            comments="A beginner-friendly installer for ROS 2 on Ubuntu.\nRuntime Robotics",
+                            **credits).present()
 
     # ---- navigation ----
 

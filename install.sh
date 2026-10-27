@@ -33,9 +33,12 @@ main() {
     sudo apt-get install -y "${missing[@]}" < /dev/null
   fi
 
-  # The latest release, not main: releases/latest redirects to .../releases/tag/<tag>
+  # The latest release, not main. releases/latest redirects to .../releases/tag/<tag> and has no rate
+  # limit (good for classrooms behind one IP), but GitHub can lag after a new release; then ask the API.
   local tag
   tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$repo/releases/latest" | sed -n 's#.*/releases/tag/##p')
+  [ -n "$tag" ] || tag=$(curl -fsSL "https://api.github.com/repos/${repo#https://github.com/}/releases/latest" |
+                         grep -F '"tag_name"' | awk -F'"' '{print $4}')
   [ -n "$tag" ] || { echo "Couldn't find a release of the installer on GitHub. Check your internet connection." >&2; exit 1; }
   echo "Downloading ROS 2 Installer $tag to $dest"
   local tmp

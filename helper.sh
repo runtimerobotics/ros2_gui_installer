@@ -1,8 +1,9 @@
 #!/bin/bash
 # Root side of the ROS 2 installer, run through pkexec.
 # Only ever installs ROS 2 packages: every name is checked before apt sees it.
-#   helper.sh check   PKG...   validate names only (no root needed)
-#   helper.sh install PKG...   add the ROS 2 repo if missing, then apt install
+#   helper.sh check   PKG... [--upgrade PKG...]   validate names only (no root needed)
+#   helper.sh install PKG... [--upgrade PKG...]   add the ROS 2 repo if missing, apt install the first
+#                                                 list, then update the second with --only-upgrade
 set -euo pipefail
 
 valid() { [[ $1 =~ ^ros-(humble|jazzy|lyrical)-[a-z0-9][a-z0-9-]*$ || $1 == ros-dev-tools ]]; }
@@ -10,8 +11,13 @@ step() { echo "##STEP $*"; }
 
 cmd=${1:-}
 shift || true
-[[ $cmd == check || $cmd == install ]] && [ $# -gt 0 ] || { echo "usage: $0 check|install PKG..." >&2; exit 2; }
-for p in "$@"; do valid "$p" || { echo "Refusing package name: $p" >&2; exit 2; }; done
+[[ $cmd == check || $cmd == install ]] && [ $# -gt 0 ] || { echo "usage: $0 check|install PKG... [--upgrade PKG...]" >&2; exit 2; }
+new=() upgrade=() into=new   # names after --upgrade are updates
+for p in "$@"; do
+  if [ "$p" = --upgrade ]; then into=upgrade; continue; fi
+  valid "$p" || { echo "Refusing package name: $p" >&2; exit 2; }
+  if [ "$into" = upgrade ]; then upgrade+=("$p"); else new+=("$p"); fi
+done
 [ "$cmd" = check ] && { echo ok; exit 0; }
 [ "$(id -u)" = 0 ] || { echo "install must run as root (through pkexec)" >&2; exit 1; }
 
@@ -34,8 +40,15 @@ fi
 
 step "Updating package lists"
 "${apt[@]}" update
-step "Installing packages"
-"${apt[@]}" -o APT::Status-Fd=1 install "$@"   # dlstatus:/pmstatus: lines drive the GUI progress bar
+# dlstatus:/pmstatus: lines from APT::Status-Fd drive the GUI progress bar
+if [ ${#new[@]} -gt 0 ]; then
+  step "Installing packages"
+  "${apt[@]}" -o APT::Status-Fd=1 install "${new[@]}"
+fi
+if [ ${#upgrade[@]} -gt 0 ]; then
+  step "Updating ROS 2 packages"
+  "${apt[@]}" -o APT::Status-Fd=1 install --only-upgrade "${upgrade[@]}"
+fi
 
 if command -v rosdep >/dev/null && [ ! -e /etc/ros/rosdep/sources.list.d/20-default.list ]; then
   step "Setting up rosdep"

@@ -7,7 +7,7 @@ from pathlib import Path
 import ros2_installer
 
 from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, expand, for_distro, network_env, os_release,
-                            parse_policy, parse_print_uris, parse_search, parse_show, parse_status, read_env, repo_configured, run, with_required,
+                            parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, with_required,
                             write_env)
 
 POLICY = """ros-jazzy-ros-gz:
@@ -23,6 +23,17 @@ assert parse_print_uris("") == 0
 assert parse_show("Package: ros-jazzy-joy\nVersion: 3\nDescription: Joystick driver: joy_node\n"
                   "Description-md5: ab\n\nPackage: ros-jazzy-x\nDescription-en: X tool\n") == {
     "ros-jazzy-joy": "Joystick driver: joy_node", "ros-jazzy-x": "X tool"}
+# Updates: only ROS 2 packages of this distro, and only upgrades ("[old version]"), not new installs.
+SIM = """Inst ros-jazzy-rviz2 [14.1.6-1noble.1] (14.1.7-1noble.2 ROS:noble [amd64])
+Inst ros-jazzy-new-dep (1.0-1 ROS:noble [amd64])
+Inst libfoo [1.0] (1.1 Ubuntu:24.04/noble-updates [amd64])
+Inst ros-humble-x [1] (2 ROS [amd64])
+Conf ros-jazzy-rviz2 (14.1.7-1noble.2 ROS:noble [amd64])
+"""
+assert parse_upgradable(SIM, "jazzy") == ["ros-jazzy-rviz2"]
+units = unit_files()
+assert "--check-updates" in units["ros2-gui-installer-updates.service"]
+assert "OnCalendar=daily" in units["ros2-gui-installer-updates.timer"]
 assert parse_search("ros-jazzy-joy - ROS 2 driver - joysticks\nros-jazzy-joy-dbgsym - debug symbols\n") == {
     "ros-jazzy-joy": "ROS 2 driver - joysticks"}
 # apt Status-Fd lines (dlstatus captured from a real download; pmstatus as apt documents it)
@@ -37,6 +48,8 @@ def helper_accepts(*pkgs):
 
 
 assert helper_accepts("ros-jazzy-desktop", "ros-dev-tools", "ros-humble-ros-gz")
+assert helper_accepts("ros-jazzy-desktop", "--upgrade", "ros-jazzy-rviz2")
+assert not helper_accepts("ros-jazzy-desktop", "--upgrade", "openssh-server")
 for bad in ["-oAPT::x=1", "vim", "ros-noetic-desktop", "ros-jazzy-x;rm", "ros-jazzy-Desktop", "ros-jazzy-"]:
     assert not helper_accepts("ros-jazzy-desktop", bad), bad
 

@@ -28,7 +28,7 @@ It walks you through five steps: **system check → choose → review → instal
 ## What you can install
 
 First pick **ROS 2 itself**: Desktop or Desktop-Full, plus `ros-dev-tools` and `rosdep`.
-Then add any of these sections, grouped into collapsible categories:
+Then tick any of these categories. Each one installs all the sections in it:
 
 | Category | Section | Main packages |
 |---|---|---|
@@ -53,7 +53,7 @@ Then add any of these sections, grouped into collapsible categories:
 | **Connect to other tools** | Connect from a browser or other tools | rosbridge, Foxglove bridge |
 | **Developer tools** | Build, test and debug your own packages | ament linters, clang-format, launch testing, `generate_parameter_library`, tracing, SROS2 |
 
-Each category row has a tick box on the right that picks everything in it, so you don't have to expand it.
+Each category is one row with a tick box on the right. When everything in a category is already installed, the row says **Installed**.
 Press **ⓘ** on a category or section to see exactly what it installs: every package with its description, whether you already have it, and the demo command.
 
 Some sections need another one: Nav2, both TurtleBots and the arm need Simulate robots, and More arm tools needs MoveIt 2.
@@ -61,6 +61,20 @@ Ticking a section ticks what it needs.
 If a section isn't released yet for your ROS 2 version, it shows greyed out.
 When a package is missing for one version (for example PlotJuggler or Cartographer on Lyrical), that version gets the rest of the section without it.
 After installing, the **Try it** page opens a terminal running a demo for each section you installed.
+
+### Updates
+
+The **Updates** group at the top of the choose page shows how many of your installed ROS 2 packages have updates waiting. Tick it to update them along with whatever else you install.
+The installer updates only packages you already have, with `apt-get install --only-upgrade`, so it doesn't change which packages apt marks as manually installed.
+
+Turn on **Notify me when ROS 2 updates are ready** to get a desktop notification when updates are waiting.
+This sets up a daily systemd user timer (`ros2-gui-installer-updates.timer`) that runs `ros2_installer.py --check-updates`.
+The check reads the package lists from Ubuntu's own daily apt refresh, so it never asks for a password.
+Turn the switch off to remove the timer. You can also run the check by hand:
+
+```bash
+~/.local/bin/ros2-gui-installer --check-updates
+```
 
 ### Individual packages
 

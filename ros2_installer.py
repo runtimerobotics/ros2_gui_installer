@@ -95,11 +95,6 @@ def parse_show(text):
     return out
 
 
-def suffix(row, widget):
-    """ExpanderRow.add_suffix is libadwaita 1.4+; 22.04 has 1.1, where it's add_action."""
-    (row.add_suffix if hasattr(row, "add_suffix") else row.add_action)(widget)
-
-
 def parse_print_uris(text):
     """Total download bytes from `apt-get --print-uris -qq install` output."""
     return sum(int(line.split()[2]) for line in text.splitlines() if line.startswith("'"))
@@ -112,6 +107,64 @@ def parse_status(line):
     """(kind 'dl'|'pm', percent, description) from an apt Status-Fd line, else None."""
     m = STATUS_LINE.match(line.rstrip("\n"))
     return (m[1], float(m[2]), m[3]) if m else None
+
+
+def parse_upgradable(text, distro):
+    """ROS 2 packages with an update waiting, from `apt-get -s upgrade` output ("Inst pkg [old] (new …)")."""
+    return re.findall(rf"^Inst (ros-{distro}-[a-z0-9-]+) \[", text, re.M)
+
+
+def upgradable(distro):
+    # Uses the package lists from Ubuntu's daily apt update, so it needs no password.
+    return parse_upgradable(run(["apt-get", "-s", "--with-new-pkgs", "upgrade"]), distro)
+
+
+UNIT = "ros2-gui-installer-updates"
+UNIT_DIR = Path.home() / ".config" / "systemd" / "user"
+
+
+def unit_files():
+    """{filename: contents} for the daily update check (a systemd user timer)."""
+    return {
+        f"{UNIT}.service": "[Unit]\nDescription=Check for ROS 2 package updates\n\n[Service]\nType=oneshot\n"
+                           f'ExecStart="{sys.executable}" "{HERE / "ros2_installer.py"}" --check-updates\n',
+        f"{UNIT}.timer": "[Unit]\nDescription=Daily check for ROS 2 package updates\n\n[Timer]\n"
+                         "OnCalendar=daily\nPersistent=true\nRandomizedDelaySec=1h\n\n[Install]\nWantedBy=timers.target\n",
+    }
+
+
+def update_notifications_on():
+    return (UNIT_DIR / f"{UNIT}.timer").exists()
+
+
+def set_update_notifications(on):
+    """Turn the daily update notification on or off. Returns False if systemd refused."""
+    systemctl = ["systemctl", "--user"]
+    if on:
+        UNIT_DIR.mkdir(parents=True, exist_ok=True)
+        for name, text in unit_files().items():
+            (UNIT_DIR / name).write_text(text)
+        steps = [systemctl + ["daemon-reload"], systemctl + ["enable", "--now", f"{UNIT}.timer"]]
+    else:
+        steps = [systemctl + ["disable", "--now", f"{UNIT}.timer"]]
+    ok = all(subprocess.run(s, capture_output=True).returncode == 0 for s in steps)
+    if not on:
+        for name in unit_files():
+            (UNIT_DIR / name).unlink(missing_ok=True)
+        subprocess.run(systemctl + ["daemon-reload"], capture_output=True)
+    return ok
+
+
+def check_updates():
+    """`--check-updates`, run by the daily timer: a desktop notification when ROS 2 updates are waiting."""
+    distro = CATALOG["distros"].get(os_release().get("VERSION_ID"))
+    pkgs = upgradable(distro) if distro else []
+    print(f"{len(pkgs)} ROS 2 package updates ready")
+    if pkgs and shutil.which("notify-send"):
+        subprocess.run(["notify-send", "--app-name=ROS 2 Installer", "--icon=system-software-update",
+                        "ROS 2 updates are ready",
+                        f"{len(pkgs)} ROS 2 package{'s' * (len(pkgs) > 1)} can be updated. "
+                        "Open ROS 2 Installer to update."])
 
 
 def repo_configured():
@@ -283,6 +336,7 @@ class Installer(Adw.ApplicationWindow):
         avail = parse_policy(run(["apt-cache", "policy", *everything])) if repo_configured() else None
 
         page = Adw.PreferencesPage()
+        page.add(self.build_updates_group())
         base = Adw.PreferencesGroup(title="1. ROS 2 itself", description="Pick one. You can change this later.")
         page.add(base)
         self.variant_checks = {}
@@ -299,78 +353,37 @@ class Installer(Adw.ApplicationWindow):
             self.variant_checks[vid] = check
 
         group = Adw.PreferencesGroup(title="2. What do you want to do?",
-                                     description="Pick any. Tick a category to pick everything in it, "
-                                                 "or press ⓘ to see exactly what gets installed.")
+                                     description="Tick what you want. Press ⓘ to see exactly what each one installs.")
         page.add(group)
-        self.goal_checks = {}
         self.have, self.avail, self.pkg_info = have, avail, {}
         threading.Thread(target=self.load_descriptions, args=(everything,), daemon=True).start()
-        titles = {g["id"]: g["title"] for g in goals}
-        expanders = {}  # category id -> (ExpanderRow, its goals, its tick box)
+        # A section is usable when its packages, and those of the sections it needs, are released.
+        self.usable = {g["id"] for g in goals if avail is None
+                       or {p for r in with_required([g["id"]]) for p in expand(r["packages"], d)} <= avail}
+        self.cat_members, self.cat_checks = {}, {}
         for c in CATALOG["categories"]:
             members = [g for g in goals if g["category"] == c["id"]]
-            if members:
-                row = Adw.ExpanderRow(title=c["title"])
-                cat_check = Gtk.CheckButton(valign=Gtk.Align.CENTER, tooltip_text="Pick everything in this category")
-                suffix(row, self.info_button(members))
-                suffix(row, cat_check)
-                expanders[c["id"]] = (row, members, cat_check)
-                group.add(row)
-        for g in goals:
-            pkgs = set(expand(g["packages"], d))
-            needed = {p for r in with_required([g["id"]]) for p in expand(r["packages"], d)}
+            if not members:
+                continue
+            usable = [g for g in members if g["id"] in self.usable]
+            missing = [g["title"] for g in members if g["id"] not in self.usable]
+            subtitle = ", ".join(g["title"] for g in members)
+            if missing:
+                subtitle += f" · not available for ROS 2 {d.title()} yet: {', '.join(missing)}"
+            row = Adw.ActionRow(title=c["title"], subtitle=subtitle)
+            row.add_prefix(Gtk.Image(icon_name=members[0].get("icon", "package-x-generic-symbolic")))
             check = Gtk.CheckButton(valign=Gtk.Align.CENTER)
-            subtitle = g["description"]
-            if g.get("requires"):
-                subtitle += f" Also installs: {', '.join(titles[r] for r in g['requires'])}."
-            row = Adw.ActionRow(title=g["title"], subtitle=subtitle)
-            row.add_prefix(Gtk.Image(icon_name=g.get("icon", "package-x-generic-symbolic")))
-            if avail is not None and not needed <= avail:
-                check.set_sensitive(False)  # only the tick box, so ⓘ still shows what's missing
-                row.set_subtitle(f"Not available for ROS 2 {d.title()} yet")
-            elif pkgs <= have:
+            complete = usable and {p for g in usable for p in expand(g["packages"], d)} <= have
+            if complete:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
-            row.add_suffix(self.info_button([g]))
+            check.set_sensitive(bool(usable) and not complete)
+            row.add_suffix(self.info_button(members))
             row.add_suffix(check)
             row.set_activatable_widget(check)
-            expanders[g["category"]][0].add_row(row)
-            self.goal_checks[g["id"]] = check
-        for g in goals:  # ticking a goal ticks what it requires, so the screen matches what gets installed
-            for req in g.get("requires", []):
-                self.goal_checks[g["id"]].connect(
-                    "toggled", lambda c, req=req: c.get_active() and self.goal_checks[req].set_active(True))
-
-        syncing = False  # True while refresh() sets a category box, so that doesn't re-tick its sections
-
-        def refresh(cat):
-            """Collapsed rows still show what's inside and how many are ticked."""
-            nonlocal syncing
-            row, members, cat_check = expanders[cat]
-            checks = [self.goal_checks[m["id"]] for m in members]
-            usable = [c for c in checks if c.get_sensitive()]
-            picked = sum(c.get_active() for c in checks)
-            summary = ", ".join(m["title"] for m in members)
-            row.set_subtitle(f"{picked} selected · {summary}" if picked else summary)
-            syncing = True
-            cat_check.set_sensitive(bool(usable))
-            cat_check.set_active(bool(usable) and all(c.get_active() for c in usable))
-            cat_check.set_inconsistent(0 < picked and not cat_check.get_active())
-            syncing = False
-
-        def on_category_toggled(cat_check, cat):
-            if not syncing:
-                want = cat_check.get_active()  # read once: each section toggle below re-syncs cat_check
-                for m in expanders[cat][1]:
-                    check = self.goal_checks[m["id"]]
-                    if check.get_sensitive():
-                        check.set_active(want)
-                refresh(cat)
-
-        for g in goals:
-            self.goal_checks[g["id"]].connect("toggled", lambda _c, cat=g["category"]: refresh(cat))
-        for cat, (_row, _members, cat_check) in expanders.items():
-            cat_check.connect("toggled", on_category_toggled, cat)
-            refresh(cat)
+            group.add(row)
+            self.cat_members[c["id"]], self.cat_checks[c["id"]] = members, check
+        for cat, check in self.cat_checks.items():
+            check.connect("toggled", self.on_category_toggled, cat)
 
         terminal = Adw.PreferencesGroup(title="3. Terminal")
         page.add(terminal)
@@ -396,6 +409,16 @@ class Installer(Adw.ApplicationWindow):
         extra.add(self.manual_row)
         page.add(extra)
         self.replace_page("choose", page)
+
+    def on_category_toggled(self, check, cat):
+        """Ticking a category also ticks the categories its sections need (Nav2 needs Simulate)."""
+        if check.get_active():
+            cat_of = {g["id"]: g["category"] for g in CATALOG["goals"]}
+            for g in self.cat_members[cat]:
+                for req in g.get("requires", []):
+                    other = self.cat_checks[cat_of[req]]
+                    if other.get_sensitive():
+                        other.set_active(True)
 
     def load_descriptions(self, pkgs):
         self.pkg_info = parse_show(run(["apt-cache", "show", "--no-all-versions", *pkgs]))
@@ -439,6 +462,45 @@ class Installer(Adw.ApplicationWindow):
                                       propagate_natural_width=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
         return Gtk.Popover(child=scroller)
 
+    def build_updates_group(self):
+        group = Adw.PreferencesGroup(title="Updates")
+        self.updates = []
+        self.update_check = Gtk.CheckButton(valign=Gtk.Align.CENTER, sensitive=False)  # ticked once updates are found
+        self.update_row = Adw.ActionRow(title="Checking for ROS 2 updates…")
+        self.update_row.add_suffix(self.update_check)
+        self.update_row.set_activatable_widget(self.update_check)
+        group.add(self.update_row)
+        threading.Thread(target=lambda: GLib.idle_add(self.show_updates, upgradable(self.distro)), daemon=True).start()
+
+        switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=update_notifications_on())
+        row = Adw.ActionRow(title="Notify me when ROS 2 updates are ready",
+                            subtitle="Checks once a day and shows a desktop notification.")
+        row.add_suffix(switch)
+        row.set_activatable_widget(switch)
+
+        def on_switch(sw, _param):
+            if not set_update_notifications(sw.get_active()):
+                row.set_subtitle("Couldn't set up the daily check (systemd user session not available).")
+        switch.connect("notify::active", on_switch)
+        group.add(row)
+        return group
+
+    def show_updates(self, pkgs):
+        self.updates = pkgs
+        n = len(pkgs)
+        if n:
+            short = [p.removeprefix(f"ros-{self.distro}-") for p in pkgs]
+            self.update_row.set_title(f"Update {n} ROS 2 package{'s' * (n > 1)}")
+            self.update_row.set_subtitle(", ".join(short[:6]) + (f" and {n - 6} more" if n > 6 else ""))
+        else:
+            self.update_row.set_title("ROS 2 is up to date")
+            self.update_row.set_subtitle("No updates for your installed ROS 2 packages.")
+        self.update_check.set_sensitive(bool(n))
+        self.update_check.set_active(bool(n))
+
+    def updates_picked(self):
+        return self.updates if self.update_check.get_active() else []
+
     def build_network_group(self, saved):
         group = Adw.PreferencesGroup(
             title="4. Network",
@@ -481,9 +543,12 @@ class Installer(Adw.ApplicationWindow):
         """(titles, packages) the user picked, packages de-duplicated in order."""
         vid = next(k for k, c in self.variant_checks.items() if c.get_active())
         variant = CATALOG["base"]["variants"][vid]
-        goals = with_required(gid for gid, c in self.goal_checks.items() if c.get_active())
+        goals = with_required(g["id"] for cat, check in self.cat_checks.items() if check.get_active()
+                              for g in self.cat_members[cat] if g["id"] in self.usable)
         titles = [f"ROS 2 {variant['title']}"] + [g["title"] for g in goals]
         pkgs = expand(variant["packages"], self.distro) + [p for g in goals for p in expand(g["packages"], self.distro)]
+        if self.updates_picked():
+            titles.append(f"Update {len(self.updates_picked())} ROS 2 packages")
         if self.manual:
             titles.append(f"{len(self.manual)} individual package{'s' * (len(self.manual) > 1)}")
             pkgs += sorted(self.manual)
@@ -589,6 +654,7 @@ class Installer(Adw.ApplicationWindow):
 
     def build_review_page(self):
         titles, pkgs = self.selection()
+        upgrades = self.updates_picked()
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(title="Ready to install",
                                      description="Press Install. Your computer will ask for your password once.")
@@ -613,7 +679,7 @@ class Installer(Adw.ApplicationWindow):
         self.next.set_sensitive(False)
 
         def work():
-            result = plan_install(pkgs)
+            result = plan_install(pkgs + upgrades)
             GLib.idle_add(self.show_plan, result)
         threading.Thread(target=work, daemon=True).start()
 
@@ -631,6 +697,7 @@ class Installer(Adw.ApplicationWindow):
 
     def start_install(self):
         _titles, pkgs = self.selection()
+        self.upgrades = self.updates_picked()
         self.want_bashrc = self.bashrc_check.get_active() and self.bashrc_check.get_sensitive()
         self.net_env = self.network_choice()[0]
         self.saw_download = False
@@ -660,7 +727,8 @@ class Installer(Adw.ApplicationWindow):
         return proc.wait()
 
     def install_worker(self, pkgs):
-        code = self.stream(["pkexec", str(HELPER), "install", *pkgs])
+        upgrades = ["--upgrade", *self.upgrades] if self.upgrades else []
+        code = self.stream(["pkexec", str(HELPER), "install", *pkgs, *upgrades])
         if code == 0:
             # User-level setup: rosdep's cache and ~/.bashrc belong to the user, not root.
             GLib.idle_add(self.on_line, "##STEP Updating rosdep\n")
@@ -695,6 +763,8 @@ class Installer(Adw.ApplicationWindow):
         self.log.scroll_mark_onscreen(self.log_end)
         if line.startswith("##STEP "):
             self.status.set_label(line[7:].strip() + "…")
+            self.progress.set_fraction(0)  # each apt run (install, then updates) fills the bar again
+            self.saw_download = False
         elif self.progress.get_fraction() == 0:
             self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
@@ -740,6 +810,9 @@ class Installer(Adw.ApplicationWindow):
 
 
 def main():
+    if "--check-updates" in sys.argv:
+        check_updates()
+        return 0
     if os.geteuid() == 0:
         sys.exit("Run the installer without sudo; it asks for your password when it needs it.")
     app = Adw.Application(application_id="org.ros2.GuiInstaller")

@@ -357,11 +357,15 @@ The test checks the parsers and the helper's name filter. It also checks that ev
 It also runs every Monday, to catch packages that get removed from apt.
 If a section is expected to be missing for a version, mark it with `not_released_for: [<distro>]` in `catalog.yaml`. The test then fails as soon as that section's packages are released, so you know to remove the marker.
 
-## About
+## Author
 
-ROS 2 Installer is created and maintained by **Lentin Joseph** at [Runtime Robotics](https://runtimerobotics.com).
+Created and maintained by **Lentin Joseph**, [Runtime Robotics](https://runtimerobotics.com).
+
+
 Found a bug or have an idea? [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues).
 In the app, open the **☰** menu → **About ROS 2 Installer**.
+
+## License
 
 Licensed under the [Apache License 2.0](LICENSE). © 2026 Lentin Joseph, Runtime Robotics.
 

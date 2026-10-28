@@ -213,7 +213,16 @@ The easiest way to make one is from the installer's **☰** menu:
 Profiles are made for one ROS 2 version and record it (`distro: jazzy`); opening one on a computer with a different version says so.
 Package names are saved as `ros-{distro}-…`, so the same file works on Humble, Jazzy and Lyrical.
 
-Ready-made examples are in [`profiles/`](profiles/), for example [`nav2-course.yaml`](profiles/nav2-course.yaml).
+Ready-made profiles are in [`profiles/`](profiles/):
+
+- [`ros2-workshop.yaml`](profiles/ros2-workshop.yaml): the ROS 2 packages of the [Runtime Robotics ROS 2 workshop](https://github.com/runtimerobotics/ros2_workshop_setup) (Jazzy): Gazebo, ros2_control, MoveIt 2 with the UR and Panda arms, TurtleBot 4, Nav2 and SLAM Toolbox. Docker and the RRBot demo built from source aren't included; use the workshop's own script for those.
+
+  ```bash
+  ros2-gui-installer --profile https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/ros2-workshop.yaml
+  ```
+
+- [`nav2-course.yaml`](profiles/nav2-course.yaml): simulation, TurtleBot and Nav2, with each laptop's ROS 2 traffic kept to itself.
+- [`beginner.yaml`](profiles/beginner.yaml): a first ROS 2 course. Copy it as a starting point for your own.
 The installer checks every profile strictly: only the settings above, only ROS 2 package names, and Domain IDs from 0 to 101.
 If something's wrong, the first page says what, and students can still choose by hand.
 Anything a computer can't use (for example a category not released for its ROS 2 version) is listed on the choose page.

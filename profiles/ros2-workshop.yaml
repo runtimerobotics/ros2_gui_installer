@@ -1,0 +1,31 @@
+# Workshop profile: the ROS 2 packages from https://github.com/runtimerobotics/ros2_workshop_setup
+# (Gazebo Harmonic, ros2_control, MoveIt 2, Universal Robots, Franka Panda, TurtleBot 4, Nav2, SLAM Toolbox).
+#   ros2-gui-installer --profile https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/ros2-workshop.yaml
+# Not included, because they aren't ROS packages: Docker, and the RRBot demo that the setup script
+# builds from source (ros2_control_demos example_1). Run that script for those.
+name: ROS 2 workshop
+description: Everything for the Runtime Robotics ROS 2 workshop, simulation only. Gazebo, ros2_control, MoveIt 2 with the UR and Panda arms, TurtleBot 4, Nav2 and SLAM Toolbox.
+distro: jazzy
+ros: desktop-full
+categories:
+  - simulate   # ros_gz, ros2_control, gz_ros2_control and their demos, xacro, joint_state_publisher_gui
+packages:      # the rest of the workshop's list, one by one, so nothing extra comes with them
+  - "ros-{distro}-tf2-tools"
+  - "ros-{distro}-robot-state-publisher"
+  - "ros-{distro}-moveit"
+  - "ros-{distro}-moveit-resources-panda-description"
+  - "ros-{distro}-moveit-resources-panda-moveit-config"
+  - "ros-{distro}-ur"
+  - "ros-{distro}-ur-simulation-gz"
+  - "ros-{distro}-rqt-joint-trajectory-controller"
+  - "ros-{distro}-turtlebot4-simulator"
+  - "ros-{distro}-navigation2"
+  - "ros-{distro}-nav2-bringup"
+  - "ros-{distro}-slam-toolbox"
+  - "ros-{distro}-cv-bridge"
+  - "ros-{distro}-image-transport"
+network:
+  domain_id: 0
+  rmw: default
+  localhost: false
+terminal: true

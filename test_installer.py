@@ -193,6 +193,18 @@ assert examples, "no example profiles"
 for example in examples:
     load_profile(example.read_text())
 
+# ros2-workshop.yaml installs exactly the ROS packages of github.com/runtimerobotics/ros2_workshop_setup
+# (its install_sim list); if that list changes, change both.
+workshop = load_profile((ros2_installer.HERE / "profiles/ros2-workshop.yaml").read_text())
+goals = {g["id"]: g for g in CATALOG["goals"]}
+picked = set(workshop["packages"]).union(*(goals[g["id"]]["packages"] for g in CATALOG["goals"]
+                                           if g["category"] in workshop["categories"]))
+assert picked == {f"ros-{{distro}}-{p}" for p in """tf2-tools xacro robot-state-publisher joint-state-publisher-gui
+    ros-gz ros-gz-sim-demos ros2-control ros2-controllers gz-ros2-control gz-ros2-control-demos moveit
+    moveit-resources-panda-description moveit-resources-panda-moveit-config ur ur-simulation-gz
+    turtlebot4-simulator navigation2 nav2-bringup slam-toolbox cv-bridge image-transport
+    rqt-joint-trajectory-controller""".split()}, picked
+
 # Install logs are saved with a header naming the setup.
 with tempfile.TemporaryDirectory() as tmp:
     ros2_installer.LOG_DIR = Path(tmp) / "logs"

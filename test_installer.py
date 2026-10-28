@@ -7,7 +7,7 @@ from pathlib import Path
 
 import ros2_installer
 
-from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, fetch_profile, load_profile, newer_release, profile_text, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
+from ros2_installer import (CATALOG, ENV_SOURCE_LINE, HELPER, demo_script, detect_distro, extra_packages, fetch_profile, load_profile, newer_release, profile_text, expand, explain_failure, for_distro, parse_lspci, terminal_script, tutorials_url, network_env,
                             parse_policy, parse_print_uris, parse_search, parse_show, parse_upgradable, unit_files, parse_status, read_env, repo_configured, run, terminal_command, usable_goals, with_required,
                             write_env)
 
@@ -173,6 +173,11 @@ back = load_profile(saved)
 assert (back["name"], back["ros"], back["categories"], back["packages"], back["network"], back["terminal"]) == \
     ("My course", "desktop", ["learn", "mobile"], ["ros-{distro}-joy"], {"rmw": "rmw_zenoh_cpp", "domain_id": 3}, False)
 assert load_profile(profile_text("Bare", "desktop-full", [], [], {}, True))["categories"] == []
+
+# "Individual packages" in a saved profile: hand-installed ROS 2 packages of this distro that no
+# catalog choice or ROS 2 option already brings in.
+assert extra_packages("jazzy", ["ros-jazzy-usb-cam", "ros-jazzy-joy", "ros-jazzy-rviz2", "ros-humble-x", "vim"],
+                      covered={"ros-jazzy-joy"}, deps={"ros-jazzy-rviz2"}) == ["ros-jazzy-usb-cam"]
 
 # The example profiles in profiles/ must always load.
 examples = sorted(Path(ros2_installer.HERE / "profiles").glob("*.yaml"))

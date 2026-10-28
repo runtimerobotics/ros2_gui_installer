@@ -200,10 +200,13 @@ Or install the app and open the profile in one line, for a fresh lab machine:
 curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | PROFILE=https://example.org/nav2-course.yaml bash
 ```
 
-The easiest way to make one: open the installer, make your choices, then **☰ → Save choices as profile…**.
+The easiest way to make one is from the installer's **☰** menu:
+
+- **Save choices as profile…** saves what you picked by hand: the ROS 2 option, the ticked categories and individual packages, plus the network and terminal settings. Use it to design a course setup.
+- **Save this computer's setup as profile…** saves what's already installed: the biggest ROS 2 option on this computer, every fully installed category, and the ROS 2 packages you installed yourself (ones a category or the ROS 2 option already brings in are left out), plus the network and terminal settings. Use it to copy a computer you've set up to a whole class.
+- **Load profile…** opens a profile file and replaces the current choices. Categories already installed on the computer stay marked **Installed** and are listed as already there.
+
 Package names are saved as `ros-{distro}-…`, so the same file works on Humble, Jazzy and Lyrical.
-Categories you already have installed can still be ticked, so you can build a profile on your own set-up computer.
-**☰ → Load profile…** opens a profile file and replaces the current choices with it.
 
 Ready-made examples are in [`profiles/`](profiles/), for example [`nav2-course.yaml`](profiles/nav2-course.yaml).
 The installer checks every profile strictly: only the settings above, only ROS 2 package names, and Domain IDs from 0 to 101.

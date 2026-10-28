@@ -335,6 +335,11 @@ def profile_text(name, ros, categories, packages, network, terminal):
             + yaml.safe_dump(data, sort_keys=False))
 
 
+def extra_packages(distro, manual, covered, deps):
+    """ROS 2 packages installed by hand (apt-mark showmanual) that no catalog choice or ROS 2 option brings in."""
+    return sorted(p for p in manual if p.startswith(f"ros-{distro}-") and p not in covered and p not in deps)
+
+
 def fetch_profile(source):
     """The text of a profile from an http(s) URL or a file path. Raises ValueError with a plain reason."""
     try:
@@ -510,11 +515,13 @@ class Installer(Adw.ApplicationWindow):
         menu = Gio.Menu()
         menu.append("Load profile…", "win.load-profile")
         menu.append("Save choices as profile…", "win.save-profile")
+        menu.append("Save this computer's setup as profile…", "win.save-setup")
         menu.append("About ROS 2 Installer", "win.about")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
         header.pack_end(self.next)
         for name, handler in [("about", self.show_about), ("load-profile", self.load_profile_dialog),
-                              ("save-profile", self.save_profile_dialog)]:
+                              ("save-profile", lambda: self.save_profile_dialog(setup=False)),
+                              ("save-setup", lambda: self.save_profile_dialog(setup=True))]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda *_a, handler=handler: handler())
             action.set_enabled(name == "about" or bool(self.distro))  # profiles need the choose page
@@ -767,7 +774,7 @@ class Installer(Adw.ApplicationWindow):
         self.have, self.avail, self.pkg_info = have, avail, {}
         threading.Thread(target=self.load_descriptions, args=(everything,), daemon=True).start()
         self.usable = usable_goals(d, avail)
-        self.cat_members, self.cat_checks = {}, {}
+        self.cat_members, self.cat_checks, self.cat_complete = {}, {}, set()
         for c in CATALOG["categories"]:
             members = [g for g in goals if g["category"] == c["id"]]
             if not members:
@@ -783,7 +790,9 @@ class Installer(Adw.ApplicationWindow):
             complete = usable and {p for g in usable for p in expand(g["packages"], d)} <= have
             if complete:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
-            check.set_sensitive(bool(usable))  # ticking an installed one is harmless and lets it go in a profile
+            check.set_sensitive(bool(usable) and not complete)
+            if complete:
+                self.cat_complete.add(c["id"])
             row.add_suffix(self.info_button(members, c["title"]))
             row.add_suffix(check)
             row.set_activatable_widget(check)
@@ -835,10 +844,13 @@ class Installer(Adw.ApplicationWindow):
         self.manual.clear()
         self.manual_row.set_subtitle("Search every ROS 2 package")
         titles = {c["id"]: c["title"] for c in CATALOG["categories"]}
+        already = []
         for cat in profile["categories"]:
             check = self.cat_checks[cat]
             if check.get_sensitive():
                 check.set_active(True)
+            elif cat in self.cat_complete:
+                already.append(titles[cat])
             else:
                 notes.append(f"{titles[cat]} isn't available for ROS 2 {d.title()}")
         wanted = [p.format(distro=d) for p in profile["packages"]]
@@ -848,7 +860,10 @@ class Installer(Adw.ApplicationWindow):
             avail = parse_policy(run(["apt-cache", "policy", *mine]))
             notes += [f"{p} isn't available" for p in mine if p not in avail]
             mine = [p for p in mine if p in avail]
-        self.manual |= set(mine)
+        have = installed(mine) if mine else set()
+        if have:
+            already.append(f"{len(have)} of its package{'s' * (len(have) > 1)}")
+        self.manual |= set(mine) - have
         if self.manual:
             self.manual_row.set_subtitle(f"{len(self.manual)} picked")
         net = profile["network"]
@@ -859,7 +874,11 @@ class Installer(Adw.ApplicationWindow):
             self.advanced.set_expanded(True)  # so students can see what the profile set
         if self.bashrc_check.get_sensitive():
             self.bashrc_check.set_active(profile["terminal"])
-        text = " ".join(filter(None, [profile["description"], "Your choices are filled in; press Next to review."]))
+        to_do = self.manual or any(c.get_active() for c in self.cat_checks.values())
+        text = " ".join(filter(None, [profile["description"], "Your choices are filled in; press Next to review."
+                                      if to_do else "Everything in this profile is already on this computer."]))
+        if already and to_do:
+            text += " Already on this computer: " + ", ".join(already) + "."
         if notes:
             text += " Not applied: " + "; ".join(notes) + "."
         row = Adw.ActionRow(title=GLib.markup_escape_text(f"Workshop profile: {profile['name']}"),
@@ -874,7 +893,7 @@ class Installer(Adw.ApplicationWindow):
     def toast(self, text):
         self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(text), timeout=5))
 
-    def pick_file(self, save, callback):
+    def pick_file(self, save, callback, initial="my-course.yaml"):
         """Ask for a .yaml file to open or save; calls callback(path) unless the user cancels."""
         yaml_files = Gtk.FileFilter(name="Workshop profiles (*.yaml)")
         yaml_files.add_pattern("*.yaml")
@@ -883,7 +902,7 @@ class Installer(Adw.ApplicationWindow):
         if hasattr(Gtk, "FileDialog"):  # GTK 4.10+: Ubuntu 24.04 and later
             dialog = Gtk.FileDialog(title=title, default_filter=yaml_files)
             if save:
-                dialog.set_initial_name("my-course.yaml")
+                dialog.set_initial_name(initial)
 
             def done(d, result):
                 try:
@@ -898,7 +917,7 @@ class Installer(Adw.ApplicationWindow):
                                             action=Gtk.FileChooserAction.SAVE if save else Gtk.FileChooserAction.OPEN)
             chooser.add_filter(yaml_files)
             if save:
-                chooser.set_current_name("my-course.yaml")
+                chooser.set_current_name(initial)
 
             def response(c, answer):
                 if answer == Gtk.ResponseType.ACCEPT:
@@ -919,28 +938,42 @@ class Installer(Adw.ApplicationWindow):
             self.toast(f"Loaded “{profile['name']}”. Check the choices, then press Next.")
         self.pick_file(False, load)
 
-    def profile_from_choices(self, name):
-        """The current choices as profile YAML. Package names use {distro}, so it works on any version."""
-        ros = next(k for k, c in self.variant_checks.items() if c.get_active())
-        categories = [cat for cat, check in self.cat_checks.items() if check.get_active()]
-        packages = sorted(p.replace(f"ros-{self.distro}-", "ros-{distro}-", 1) for p in self.manual)
+    def profile_from_choices(self, name, setup=False):
+        """Profile YAML from what was picked by hand, or (setup=True) from what's installed on this computer,
+        so one set-up computer can be copied to a whole class. Packages use {distro}: the file works on any version."""
+        d, variants = self.distro, CATALOG["base"]["variants"]
+        picked = next(k for k, c in self.variant_checks.items() if c.get_active())
+        if setup:
+            on_pc = [vid for vid, v in variants.items() if set(expand(v["packages"], d)) <= self.have]
+            ros = on_pc[0] if on_pc else picked  # catalog order: biggest first
+            categories = [cat for cat in self.cat_checks if cat in self.cat_complete]
+            covered = {p for v in variants.values() for p in expand(v["packages"], d)} | \
+                      {p for g in CATALOG["goals"] for p in expand(g["packages"], d)}
+            deps = set(run(["apt-cache", "depends", "--recurse", "--no-recommends", "--no-suggests", "--no-conflicts",
+                            "--no-breaks", "--no-replaces", "--no-enhances", *expand(variants[ros]["packages"], d)]).split())
+            chosen = extra_packages(d, run(["apt-mark", "showmanual"]).split(), covered, deps)
+        else:
+            ros = picked
+            categories = [cat for cat, check in self.cat_checks.items() if check.get_active()]
+            chosen = self.manual
+        packages = sorted(p.replace(f"ros-{d}-", "ros-{distro}-", 1) for p in chosen)
         rmw = self.rmw_options[self.rmw.get_selected()]["id"]
         network = {k: v for k, v in [("domain_id", self.domain.get_value_as_int()), ("rmw", rmw),
                                       ("localhost", self.localhost.get_active())]
                    if v not in (0, "default", False)}
         return profile_text(name, ros, categories, packages, network, self.bashrc_check.get_active())
 
-    def save_profile_dialog(self):
+    def save_profile_dialog(self, setup):
         def save(path):
             path = Path(path) if Path(path).suffix in (".yaml", ".yml") else Path(path + ".yaml")
             name = path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or "My course"
             try:
-                path.write_text(self.profile_from_choices(name))
+                path.write_text(self.profile_from_choices(name, setup))
             except OSError as e:
                 self.toast(f"Couldn't save the profile: {e.strerror}")
                 return
             self.toast(f"Saved “{name}” to {path}")
-        self.pick_file(True, save)
+        self.pick_file(True, save, "this-computer.yaml" if setup else "my-course.yaml")
 
     def on_category_toggled(self, check, cat):
         """Ticking a category also ticks the categories its sections need (Nav2 needs Simulate)."""

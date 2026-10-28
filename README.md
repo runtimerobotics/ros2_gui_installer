@@ -31,6 +31,45 @@ Created by **Lentin Joseph** · [Runtime Robotics](https://runtimerobotics.com)
 
 <p align="center"><img src="docs/screenshots/3-categories.png" width="640" alt="Choosing what to install: one row per category with a tick box and an info button"></p>
 
+## Features
+
+**Easy to start**
+- **One command to install:** `curl … | bash` sets up the app, its menu entry and icon, then opens it. There's also a [`.deb` package](#or-install-the-deb-package).
+- **Picks the right ROS 2 for you:** Humble on Ubuntu 22.04, Jazzy on 24.04, Lyrical on 26.04. It also works on Linux Mint and Pop!_OS.
+- **Five clear steps**, with a step bar at the top: *Check → Choose → Review → Install → Try it*.
+- **One password prompt** for the whole install. You never need to type `sudo` or edit apt sources yourself.
+
+**Choose what you need**
+- **Desktop-Full (recommended), Desktop or ROS-Base** (for robots, Raspberry Pi and Jetson).
+- **[20 sections in 10 categories](#what-you-can-install), each one tick box:** simulation (Gazebo), mobile robots, Nav2, TurtleBot 3 and 4, robot arms, MoveIt 2, cameras, LiDAR/IMU/GPS, localization, 3D mapping, AprilTags, URDF, RViz and rqt, recording (rosbag), behavior trees, rosbridge and Foxglove, tutorials, and developer tools.
+- **ⓘ What's included:** a plain-language explanation of each section, with every package it installs.
+- **[Any ROS 2 package](#individual-packages):** search all ROS 2 packages by name or description and tick the ones you want.
+- **Already installed?** Sections and packages you already have are marked *Installed*.
+
+**Safe and clear**
+- **System check first:** Ubuntu version, processor, memory, graphics card, disk space, internet and the password prompt, with fixes in plain words.
+- **Review before installing:** the number of packages and the download size, worked out by apt.
+- **A real progress bar**, and *Show details* for the full apt output.
+- **Plain-English errors**, for example "another program is installing" or "not enough disk space", with **Try again**, **Copy details** and a saved log.
+- **Handles new and old computers:** waits for Ubuntu's own updates to finish, survives a broken third-party repository, and switches old ROS 2 apt sources to the official `ros2-apt-source`.
+
+**After installing**
+- **Try it:** **Open terminal** with ROS 2 already loaded, **Run** turtlesim, and every demo for what you installed (simulators, Nav2, MoveIt…).
+- **Loads ROS 2 in new terminals** (optional), so `ros2` works right away.
+- **[Updates](#updates):** **☰ → Update ROS 2 packages…** lists waiting updates and installs them. It can also show a daily desktop notification.
+- **Tells you when a newer installer is out.**
+
+**For classrooms and workshops**
+- **[Workshop profiles](#workshop-profiles-same-setup-on-every-computer):** a small YAML file that ticks everything a course needs. Open it with `--profile <url>` or **☰ → Open profile…**, or set up a new lab computer in one command.
+- **Create profile…** in its own window, starting from an empty profile, this computer's setup or an existing file. **Save choices as profile…** saves what you've ticked.
+- **[Network settings](#network-settings-for-classrooms-and-labs):** `ROS_DOMAIN_ID`, the middleware (RMW), and keeping ROS 2 traffic on this computer, so robots in a lab don't see each other.
+- **Ready-made profiles** in [`profiles/`](profiles/), including the [Runtime Robotics ROS 2 workshop](profiles/ros2-workshop.yaml).
+
+**Works on many computers**
+- **amd64 and arm64** (Jetson, Raspberry Pi 4/5), on **GNOME, KDE, XFCE, MATE, Cinnamon and LXQt**, with **X11 or Wayland**.
+- **Screen-reader friendly:** buttons and status icons have spoken labels.
+- **Tested in CI** on Ubuntu 22.04, 24.04 and 26.04, on amd64 and arm64, with real installs.
+
 ## Quick start
 
 On Ubuntu 22.04, 24.04 or 26.04 (or Linux Mint / Pop!_OS), open a terminal (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>T</kbd>) and run:

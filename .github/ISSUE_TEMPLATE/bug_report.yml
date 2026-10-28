@@ -1,0 +1,51 @@
+name: Something went wrong
+description: An install failed, a button didn't work, or something looked wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you click, and what did you see? A screenshot helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Install log
+      description: >
+        If an install failed, press **Copy details** on the install page and paste it here.
+        Logs are also saved in `~/.local/state/ros2-gui-installer/`.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Installer version
+      description: "☰ → About ROS 2 Installer, or run `ros2-gui-installer --version`"
+      placeholder: "0.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: ubuntu
+    attributes:
+      label: Ubuntu version
+      options:
+        - 22.04 (Humble)
+        - 24.04 (Jazzy)
+        - 26.04 (Lyrical)
+        - Other (Linux Mint, Pop!_OS, ... say which below)
+    validations:
+      required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Desktop and computer
+      description: For example GNOME on a laptop, KDE, XFCE, Jetson Orin, Raspberry Pi 5
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install the installer?
+      options:
+        - The one-line curl command
+        - The .deb package
+        - From a git clone

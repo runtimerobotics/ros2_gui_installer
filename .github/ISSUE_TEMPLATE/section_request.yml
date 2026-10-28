@@ -1,0 +1,24 @@
+name: Add a section or package
+description: Suggest something the installer should offer
+labels: [enhancement]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What should it install, and what is it for?
+      description: Who would tick it, and what can they do afterwards?
+    validations:
+      required: true
+  - type: textarea
+    id: packages
+    attributes:
+      label: Packages
+      description: The apt package names, for example `ros-jazzy-foxglove-bridge`, and any demo command.
+  - type: checkboxes
+    id: distros
+    attributes:
+      label: Released for
+      options:
+        - label: Humble
+        - label: Jazzy
+        - label: Lyrical

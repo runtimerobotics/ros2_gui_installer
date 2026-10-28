@@ -204,6 +204,9 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 The easiest way to make one is from the installer's **☰** menu:
 
 - **Create profile…** opens the profile editor in its own window on top of the installer. Everything can be ticked there, even what's already installed on your computer, because nothing is installed: you're only writing a file. Give the profile a **Name** and **Description**, and **Start from** an empty profile, **this computer's setup** (the ROS 2 option, categories and hand-installed ROS 2 packages already on it), or an existing **file**. Press **Save…** when you're done (or **Cancel** to close it without saving); **Use it here** in the confirmation fills the same choices in for installing on this computer.
+
+<p align="center"><img src="docs/screenshots/9-create-profile.png" width="520" alt="The Create a profile window: name, description, start from, and the choices"></p>
+
 - **Save choices as profile…** saves the current selections in the normal installer, without opening the editor.
 - **Open profile…** opens a profile file and replaces the current choices, ready to install. Categories already installed on the computer stay marked **Installed** and are listed as already there.
 
@@ -361,7 +364,7 @@ If a section is expected to be missing for a version, mark it with `not_released
 
 Created and maintained by **Lentin Joseph**, [Runtime Robotics](https://runtimerobotics.com).
 
-Found a bug or have an idea? [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues).
+Found a bug or have an idea? [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues/new/choose). Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md). What changed in each version is in [CHANGELOG.md](CHANGELOG.md).
 In the app, open the **☰** menu → **About ROS 2 Installer**.
 
 ## License

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/runtimerobotics/ros2_gui_installer#troubleshooting
+    about: Common install problems and what the installer's messages mean

@@ -8,6 +8,16 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    name: Lint (shellcheck, pyflakes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck python3-pyflakes
+      # helper.sh runs as root and install.sh is piped from curl, so warnings there fail the build
+      - run: shellcheck --severity=warning helper.sh install.sh packaging/build-deb.sh
+      - run: python3 -m pyflakes ros2_installer.py test_installer.py
+
   test:
     name: Ubuntu ${{ matrix.ubuntu }} ${{ matrix.runner == 'ubuntu-24.04-arm' && 'arm64' || 'amd64' }}
     runs-on: ${{ matrix.runner }}

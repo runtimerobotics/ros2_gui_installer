@@ -29,7 +29,8 @@ It walks you through five steps: **system check → choose → review → instal
 
 Created by **Lentin Joseph** · [Runtime Robotics](https://runtimerobotics.com)
 
-<p align="center"><img src="docs/screenshots/3-categories.png" width="640" alt="Choosing what to install: one row per category with a tick box and an info button"></p>
+<p align="center"><img src="docs/demo.gif" width="720" alt="The installer in action: system check, ticking categories, searching for a package, review, install progress, and the Try it page"><br>
+<sub>The whole flow on Ubuntu 24.04 with ROS 2 Jazzy: check, choose, search a package, review, install, try it. Waits for apt are cut.</sub></p>
 
 ## Features
 

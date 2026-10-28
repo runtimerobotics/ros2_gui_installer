@@ -361,7 +361,6 @@ If a section is expected to be missing for a version, mark it with `not_released
 
 Created and maintained by **Lentin Joseph**, [Runtime Robotics](https://runtimerobotics.com).
 
-
 Found a bug or have an idea? [Open an issue](https://github.com/runtimerobotics/ros2_gui_installer/issues).
 In the app, open the **☰** menu → **About ROS 2 Installer**.
 

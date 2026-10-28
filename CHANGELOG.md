@@ -3,7 +3,7 @@
 What changed in each release. Full notes and the `.deb` for each version are on the
 [releases page](https://github.com/runtimerobotics/ros2_gui_installer/releases).
 
-## Unreleased
+## 0.2.5 (2026-10-28)
 - `--profile` while the installer is already open fills in that window instead of doing nothing; opening the installer again brings its window forward instead of a second one.
 - New profile `profiles/ros2-workshop.yaml`: the ROS 2 packages of the Runtime Robotics ROS 2 workshop.
 

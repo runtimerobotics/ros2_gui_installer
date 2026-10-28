@@ -3,6 +3,10 @@
 What changed in each release. Full notes and the `.deb` for each version are on the
 [releases page](https://github.com/runtimerobotics/ros2_gui_installer/releases).
 
+## Unreleased
+- `--profile` while the installer is already open fills in that window instead of doing nothing; opening the installer again brings its window forward instead of a second one.
+- New profile `profiles/ros2-workshop.yaml`: the ROS 2 packages of the Runtime Robotics ROS 2 workshop.
+
 ## 0.2.4 (2026-10-28)
 - After a failed update from **Update ROS 2 packages…**, **Back** goes to the choose page instead of an old or missing review page.
 - After an update, the last page says *Your ROS 2 packages are up to date* instead of *Everything is installed*.

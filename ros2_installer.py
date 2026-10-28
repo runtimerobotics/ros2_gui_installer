@@ -563,13 +563,21 @@ class Installer(Adw.ApplicationWindow):
             self.build_choose_page()
         self.show_page("check")
         if PROFILE_SOURCE:
-            def load():
-                try:
-                    result = load_profile(fetch_profile(PROFILE_SOURCE))
-                except ValueError as e:
-                    result = str(e)
-                GLib.idle_add(self.apply_profile, result)
-            threading.Thread(target=load, daemon=True).start()
+            self.open_profile(PROFILE_SOURCE)
+
+    def open_profile(self, source, forwarded=False):
+        """Load a --profile URL or file in the background. forwarded: from a second launch while this
+        window is open, so there's no check-page row for it; fill in the choices, or say why not."""
+        def load():
+            try:
+                result = load_profile(fetch_profile(source))
+            except ValueError as e:
+                result = str(e)
+            if forwarded and isinstance(result, str):
+                GLib.idle_add(self.toast, f"Couldn't open the profile: {result}")
+            else:
+                GLib.idle_add(self.use_profile if forwarded else self.apply_profile, result)
+        threading.Thread(target=load, daemon=True).start()
 
     def on_close_request(self, _window):
         """Closing mid-install would cut apt off (its output pipe closes) and can leave dpkg half done."""
@@ -1595,6 +1603,8 @@ def main():
             PROFILE_SOURCE = args[i + 1]
         elif arg.startswith("--profile="):
             PROFILE_SOURCE = arg.split("=", 1)[1]
+    if PROFILE_SOURCE and not PROFILE_SOURCE.startswith(("https://", "http://")):
+        PROFILE_SOURCE = str(Path(PROFILE_SOURCE).expanduser().resolve())  # an open window has another cwd
     if "--check-updates" in sys.argv:
         check_updates()
         return 0
@@ -1603,12 +1613,31 @@ def main():
     GLib.set_prgname(APP_ID)  # X11 window class, so the dock matches the window to its menu entry and icon
     app = Adw.Application(application_id=APP_ID)
 
+    def main_window():
+        return next((w for w in app.get_windows() if isinstance(w, Installer) and not w.parent), None)
+
     def activate(a):
+        if main_window():  # launched again while open: bring the window forward, don't open a second one
+            return main_window().present()
         # The icon ships in data/, so it shows even when running from a git clone.
         Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(str(HERE / "data"))
         Gtk.Window.set_default_icon_name(APP_ID)
         Installer(a).present()
     app.connect("activate", activate)
+
+    def open_profile(_action, source):
+        activate(app)
+        win = main_window()
+        if win.distro:  # without a supported Ubuntu there's no choose page to fill in
+            win.open_profile(source.get_string(), forwarded=True)
+    action = Gio.SimpleAction.new("open-profile", GLib.VariantType.new("s"))
+    action.connect("activate", open_profile)
+    app.add_action(action)
+    app.register(None)
+    if app.get_is_remote() and PROFILE_SOURCE:  # already open: hand the profile to that window
+        app.activate_action("open-profile", GLib.Variant("s", PROFILE_SOURCE))
+        app.get_dbus_connection().flush_sync(None)  # send it before this process exits
+        return 0
     return app.run(sys.argv[:1])  # our options are handled above; GTK has none to parse
 
 

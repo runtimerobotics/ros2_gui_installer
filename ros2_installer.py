@@ -515,6 +515,7 @@ class Installer(Adw.ApplicationWindow):
         self.distro = detect_distro()
         self.blockers = set()
         self.installing = False
+        self.update_only = False
         self.connect("close-request", self.on_close_request)
         self.total = 0
 
@@ -631,7 +632,8 @@ class Installer(Adw.ApplicationWindow):
         page = self.stack.get_visible_child_name()
         if self.editing and page == "choose":
             return self.close()  # Cancel: the editor window goes away, nothing saved
-        self.show_page({"choose": "check", "review": "choose", "install": "review", "packages": "choose"}[page])
+        install_back = "choose" if self.update_only else "review"  # an update has no review page
+        self.show_page({"choose": "check", "review": "choose", "install": install_back, "packages": "choose"}[page])
 
     def on_next(self):
         page = self.stack.get_visible_child_name()
@@ -1386,6 +1388,7 @@ class Installer(Adw.ApplicationWindow):
 
     def start_install(self, updates=None):
         """Install the current choices, or (updates) only update those installed ROS 2 packages."""
+        self.update_only = bool(updates)
         if updates:
             pkgs, self.upgrades, self.want_bashrc = [], updates, False
             self.net_env = None  # an update leaves the network settings and .bashrc as they are
@@ -1514,7 +1517,8 @@ class Installer(Adw.ApplicationWindow):
     def build_done_page(self):
         d = self.distro
         status = Adw.StatusPage(icon_name="emblem-ok-symbolic", title=f"ROS 2 {d.title()} is ready",
-                                description="Everything is installed. Here's how to start.")
+                                description="Your ROS 2 packages are up to date." if self.update_only
+                                else "Everything is installed. Here's how to start.")
         nxt = Adw.PreferencesGroup(title="What next?")
         loads = self.bashrc.exists() and self.source_line in self.bashrc.read_text()
         row = Adw.ActionRow(title="1. Open a terminal",

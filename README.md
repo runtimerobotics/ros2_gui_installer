@@ -94,7 +94,7 @@ A step bar at the top always shows where you are and what comes next: **Check â†
 | <img src="docs/screenshots/5-individual-packages.png" width="400" alt="Searching individual packages"><br>**Individual packages** | <img src="docs/screenshots/6-review.png" width="400" alt="Review with package count and download size"><br>**3. Review** |
 | <img src="docs/screenshots/7-install.png" width="400" alt="Install progress bar"><br>**4. Install** | <img src="docs/screenshots/8-try-it.png" width="400" alt="Last page: What next and demo buttons"><br>**5. Try it:** what next, and demos |
 
-Screenshots are from version 0.1.8 on a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
+Screenshots are from version 0.2.3 on a fresh Ubuntu 24.04 with ROS 2 Jazzy. The colours follow your desktop's theme.
 
 ## What you can install
 

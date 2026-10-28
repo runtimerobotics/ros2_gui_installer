@@ -26,7 +26,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / "helper.sh"
 CATALOG = yaml.safe_load((HERE / "catalog.yaml").read_text())
-__version__ = "0.2.3"  # bump with each GitHub release; the tag is v<version>
+__version__ = "0.2.4"  # bump with each GitHub release; the tag is v<version>
 REPO_URL = "https://github.com/runtimerobotics/ros2_gui_installer"
 APP_ID = "com.runtimerobotics.Ros2Installer"  # also the icon and .desktop file name
 MIN_FREE_GB = 10  # Desktop-Full + Gazebo is ~6-8 GB once unpacked

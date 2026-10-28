@@ -3,6 +3,10 @@
 What changed in each release. Full notes and the `.deb` for each version are on the
 [releases page](https://github.com/runtimerobotics/ros2_gui_installer/releases).
 
+## 0.2.4 (2026-10-28)
+- After a failed update from **Update ROS 2 packages…**, **Back** goes to the choose page instead of an old or missing review page.
+- After an update, the last page says *Your ROS 2 packages are up to date* instead of *Everything is installed*.
+
 ## 0.2.3 (2026-10-28)
 - **☰ → Create profile…** opens the profile editor in its own window. Everything can be ticked there, because it only writes a file. **Save…** closes it and offers **Use it here**; **Cancel** closes it without saving.
 - **☰ → Update ROS 2 packages…** is a dialog that lists waiting updates, installs them with **Update now**, and holds the daily notification switch. The Updates group is gone from the choose page.

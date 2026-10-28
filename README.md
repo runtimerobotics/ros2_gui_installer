@@ -42,6 +42,24 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 The installer opens by itself. Press **Next**, tick what you want, then press **Install**.
 Later, open **ROS 2 Installer** from your app menu. More options are under [Install](#install).
 
+**Got a workshop profile?** A profile ticks everything a course needs, so you only review and press **Install**. For example, for the [ROS 2 workshop](profiles/ros2-workshop.yaml):
+
+- On a new computer, install the app and open it with the profile in one go:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | PROFILE=https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/ros2-workshop.yaml bash
+  ```
+
+- If the app is already installed:
+
+  ```bash
+  ros2-gui-installer --profile https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/profiles/ros2-workshop.yaml
+  ```
+
+- Got the profile as a file? Open it from the app's **☰** menu → **Open profile…**.
+
+See [Workshop profiles](#workshop-profiles-same-setup-on-every-computer) to make your own.
+
 ## Supported systems
 
 | Ubuntu | ROS 2 |

@@ -505,8 +505,13 @@ def status_icon(state):
 
 
 class Installer(Adw.ApplicationWindow):
-    def __init__(self, app):
-        super().__init__(application=app, title="ROS 2 Installer", default_width=760, default_height=680)
+    def __init__(self, app, parent=None):
+        """The installer; with parent, the Create profile editor in its own window on top of it."""
+        super().__init__(application=app, title="Create a profile" if parent else "ROS 2 Installer",
+                         default_width=760, default_height=720 if parent else 680,
+                         transient_for=parent, modal=bool(parent))
+        self.parent = parent
+        self.check_rows = {}
         self.distro = detect_distro()
         self.blockers = set()
         self.installing = False
@@ -524,14 +529,17 @@ class Installer(Adw.ApplicationWindow):
         menu.append("Create profile…", "win.create-profile")
         menu.append("Open profile…", "win.load-profile")
         menu.append("Save choices as profile…", "win.save-profile")
-        menu.append("About ROS 2 Installer", "win.about")
-        header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
+        if not parent:
+            menu.append("Update ROS 2 packages…", "win.updates")
+            menu.append("About ROS 2 Installer", "win.about")
+            header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
         header.pack_end(self.next)
         self.editing = False  # True in Create profile mode: choices go into a file, nothing is installed
         self.saved_profile = None  # the last profile saved from the editor, for "Use it here"
         for name, handler in [("about", self.show_about), ("load-profile", self.load_profile_dialog),
                               ("save-profile", self.save_profile_dialog), ("create-profile", self.create_profile),
-                              ("use-saved", lambda: self.leave_editor(self.saved_profile))]:
+                              ("use-saved", lambda: self.use_profile(self.saved_profile)),
+                              ("updates", self.show_updates_dialog)]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda *_a, handler=handler: handler())
             action.set_enabled(name == "about" or bool(self.distro))  # profiles need the choose page
@@ -545,6 +553,10 @@ class Installer(Adw.ApplicationWindow):
         self.toasts = Adw.ToastOverlay(child=box)
         self.set_content(self.toasts)
 
+        if parent:  # the profile editor only shows the choices
+            self.build_choose_page(editing=True)
+            self.show_page("choose")
+            return
         self.build_check_page()
         if self.distro:
             self.build_choose_page()
@@ -618,7 +630,7 @@ class Installer(Adw.ApplicationWindow):
     def on_back(self):
         page = self.stack.get_visible_child_name()
         if self.editing and page == "choose":
-            return self.leave_editor()
+            return self.close()  # Cancel: the editor window goes away, nothing saved
         self.show_page({"choose": "check", "review": "choose", "install": "review", "packages": "choose"}[page])
 
     def on_next(self):
@@ -766,11 +778,8 @@ class Installer(Adw.ApplicationWindow):
         page = Adw.PreferencesPage()
         self.profile_group = Adw.PreferencesGroup(visible=False)  # filled in by apply_profile
         page.add(self.profile_group)
-        self.updates = []
         if editing:
             page.add(self.build_editor_group())
-        elif os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
-            page.add(self.build_updates_group())
         base = Adw.PreferencesGroup(title="ROS 2 itself",
                                     description="Pick what the class's computers should install." if editing else
                                     "New to ROS 2? Keep Desktop-Full, tick Learn ROS 2 below, then press Next. "
@@ -869,14 +878,13 @@ class Installer(Adw.ApplicationWindow):
         return group
 
     def create_profile(self):
-        self.build_choose_page(editing=True)
-        self.show_page("choose")
+        Installer(self.get_application(), parent=self).present()
 
-    def leave_editor(self, profile=None):
-        """Back to installing; with a profile, its choices are filled in to install on this computer."""
-        self.build_choose_page()
-        if profile:
-            self.apply_profile(profile)
+    def use_profile(self, profile):
+        """Fill in a profile's choices to install on this computer (Use it here, Open profile)."""
+        if self.installing:
+            return self.toast("Wait until the current install finishes.")
+        self.apply_profile(profile)
         self.show_page("choose")
 
     def editor_start_empty(self):
@@ -1014,11 +1022,7 @@ class Installer(Adw.ApplicationWindow):
             except ValueError as e:
                 self.toast(f"Couldn't open the profile: {e}")
                 return
-            if self.editing:  # Open profile is for installing; Start from: File… edits one
-                self.leave_editor(profile)
-            else:
-                self.apply_profile(profile)
-                self.show_page("choose")
+            self.use_profile(profile)
             self.toast(f"Loaded “{profile['name']}”. Check the choices, then press Next.")
         self.pick_file(False, load)
 
@@ -1066,10 +1070,12 @@ class Installer(Adw.ApplicationWindow):
             except OSError as e:
                 self.toast(f"Couldn't save the profile: {e.strerror}")
                 return
-            if self.editing:
-                self.saved_profile = load_profile(text)
-                self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(f"Saved “{title}” to {path}"),
-                                                button_label="Use it here", action_name="win.use-saved", timeout=8))
+            if self.editing:  # hand the profile to the installer window, and close the editor
+                self.parent.saved_profile = load_profile(text)
+                self.parent.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(f"Saved “{title}” to {path}"),
+                                                       button_label="Use it here", action_name="win.use-saved",
+                                                       timeout=10))
+                self.close()
             else:
                 self.toast(f"Saved “{title}” to {path}")
         self.pick_file(True, save, f"{slug}.yaml")
@@ -1127,15 +1133,23 @@ class Installer(Adw.ApplicationWindow):
                                       propagate_natural_width=True, hscrollbar_policy=Gtk.PolicyType.NEVER)
         return Gtk.Popover(child=scroller)
 
-    def build_updates_group(self):
-        group = Adw.PreferencesGroup(title="Updates")
-        self.update_check = Gtk.CheckButton(valign=Gtk.Align.CENTER, sensitive=False)  # ticked once updates are found
-        self.update_row = Adw.ActionRow(title="Checking for ROS 2 updates…")
-        self.update_row.add_suffix(self.update_check)
-        self.update_row.set_activatable_widget(self.update_check)
-        group.add(self.update_row)
-        threading.Thread(target=lambda: GLib.idle_add(self.show_updates, upgradable(self.distro)), daemon=True).start()
+    def show_updates_dialog(self):
+        """☰ → Update ROS 2 packages…: what's waiting, Update now, and the daily notification switch."""
+        if self.installing:
+            return self.toast("Wait until the current install finishes.")
+        dialog = Adw.Window(transient_for=self, modal=True, title="Update ROS 2", default_width=560, default_height=520)
+        header = Adw.HeaderBar()
+        update = Gtk.Button(label="Update now", css_classes=["suggested-action"], sensitive=False)
+        header.pack_end(update)
+        page = Adw.PreferencesPage()
+        group = Adw.PreferencesGroup()
+        summary = Adw.ActionRow(title="Checking for ROS 2 updates…")
+        listing = Adw.ExpanderRow(title="Packages", visible=False)
+        group.add(summary)
+        group.add(listing)
+        page.add(group)
 
+        notify = Adw.PreferencesGroup()
         switch = Gtk.Switch(valign=Gtk.Align.CENTER, active=update_notifications_on())
         row = Adw.ActionRow(title="Notify me when ROS 2 updates are ready",
                             subtitle="Checks once a day and shows a desktop notification.")
@@ -1146,23 +1160,36 @@ class Installer(Adw.ApplicationWindow):
             if not set_update_notifications(sw.get_active()):
                 row.set_subtitle("Couldn't set up the daily check (systemd user session not available).")
         switch.connect("notify::active", on_switch)
-        group.add(row)
-        return group
+        notify.add(row)
+        page.add(notify)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        box.append(header)
+        box.append(page)
+        dialog.set_content(box)
+        found = []
 
-    def show_updates(self, pkgs):
-        self.updates = pkgs
-        n = len(pkgs)
-        if n:
-            short = [p.removeprefix(f"ros-{self.distro}-") for p in pkgs]
-            self.update_row.set_title(f"Update {n} ROS 2 package{'s' * (n > 1)}")
-            self.update_row.set_subtitle(", ".join(short[:6]) + (f" and {n - 6} more" if n > 6 else ""))
+        def show(pkgs):
+            found[:] = pkgs
+            n = len(pkgs)
+            if not n:
+                summary.set_title("ROS 2 is up to date")
+                summary.set_subtitle("No updates for your installed ROS 2 packages.")
+                return
+            summary.set_title(f"{n} ROS 2 package update{'s' * (n > 1)} ready")
+            summary.set_subtitle("Update now downloads and installs them. Your computer asks for your password once.")
+            for p in pkgs[:200]:  # the expander stays quick; the count above is the full number
+                listing.add_row(Adw.ActionRow(title=p))
+            listing.set_subtitle(f"{n} packages" + (", first 200 shown" if n > 200 else ""))
+            listing.set_visible(True)
+            update.set_sensitive(True)
+
+        if not os.path.isdir(f"/opt/ros/{self.distro}"):
+            summary.set_title("ROS 2 isn't installed yet")
+            summary.set_subtitle("Install it first; updates show up here afterwards.")
         else:
-            self.update_row.set_title("ROS 2 is up to date")
-            self.update_row.set_subtitle("No updates for your installed ROS 2 packages.")
-        self.update_check.set_sensitive(bool(n))  # unticked: updating is a choice, not a side effect
-
-    def updates_picked(self):
-        return self.updates if self.updates and self.update_check.get_active() else []
+            threading.Thread(target=lambda: GLib.idle_add(show, upgradable(self.distro)), daemon=True).start()
+        update.connect("clicked", lambda _b: (dialog.close(), self.start_install(updates=list(found))))
+        dialog.present()
 
     def build_network_group(self, saved):
         group = Adw.PreferencesGroup(title="Network")
@@ -1212,8 +1239,6 @@ class Installer(Adw.ApplicationWindow):
                               for g in self.cat_members[cat] if g["id"] in self.usable)
         titles = [f"ROS 2 {variant['title']}"] + [g["title"] for g in goals]
         pkgs = expand(variant["packages"], self.distro) + [p for g in goals for p in expand(g["packages"], self.distro)]
-        if self.updates_picked():
-            titles.append(f"Update {len(self.updates_picked())} ROS 2 packages")
         if self.manual:
             titles.append(f"{len(self.manual)} individual package{'s' * (len(self.manual) > 1)}")
             pkgs += sorted(self.manual)
@@ -1319,7 +1344,6 @@ class Installer(Adw.ApplicationWindow):
 
     def build_review_page(self):
         titles, pkgs = self.selection()
-        upgrades = self.updates_picked()
         page = Adw.PreferencesPage()
         group = Adw.PreferencesGroup(title="Ready to install",
                                      description="Press Install. Your computer will ask for your password once.")
@@ -1344,7 +1368,7 @@ class Installer(Adw.ApplicationWindow):
         self.next.set_sensitive(False)
 
         def work():
-            result = plan_install(pkgs + upgrades)
+            result = plan_install(pkgs)
             GLib.idle_add(self.show_plan, result)
         threading.Thread(target=work, daemon=True).start()
 
@@ -1360,11 +1384,16 @@ class Installer(Adw.ApplicationWindow):
 
     # ---- 4. install ----
 
-    def start_install(self):
-        _titles, pkgs = self.selection()
-        self.upgrades = self.updates_picked()
-        self.want_bashrc = self.bashrc_check.get_active() and self.bashrc_check.get_sensitive()
-        self.net_env = self.network_choice()[0]
+    def start_install(self, updates=None):
+        """Install the current choices, or (updates) only update those installed ROS 2 packages."""
+        if updates:
+            pkgs, self.upgrades, self.want_bashrc = [], updates, False
+            self.net_env = None  # an update leaves the network settings and .bashrc as they are
+        else:
+            _titles, pkgs = self.selection()
+            self.upgrades = []
+            self.want_bashrc = self.bashrc_check.get_active() and self.bashrc_check.get_sensitive()
+            self.net_env = self.network_choice()[0]
         self.saw_download = False
 
         page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
@@ -1376,7 +1405,7 @@ class Installer(Adw.ApplicationWindow):
         scroller = Gtk.ScrolledWindow(child=self.log, vexpand=True, min_content_height=240)
         self.details = Gtk.Expander(label="Show details", child=scroller)
         self.retry = Gtk.Button(label="Try again", css_classes=["pill", "suggested-action"])
-        self.retry.connect("clicked", lambda _b: self.start_install())
+        self.retry.connect("clicked", lambda _b: self.start_install(updates))
         # Shown after a failure, so a student can send the log instead of describing the problem.
         self.copy_log = Gtk.Button(label="Copy details", css_classes=["pill"])
         self.copy_log.connect("clicked", lambda _b: self.copy_report())
@@ -1411,11 +1440,12 @@ class Installer(Adw.ApplicationWindow):
             if self.want_bashrc:
                 with self.bashrc.open("a") as f:
                     f.write(f"\n# Added by ROS 2 Installer\n{self.source_line}\n")
-            write_env(self.net_env)  # always rewritten, so turning a setting off sticks
-            bashrc_text = self.bashrc.read_text() if self.bashrc.exists() else ""
-            if self.net_env and ENV_SOURCE_LINE not in bashrc_text:
-                with self.bashrc.open("a") as f:
-                    f.write(f"\n# ROS 2 network settings (ROS 2 Installer)\n{ENV_SOURCE_LINE}\n")
+            if self.net_env is not None:
+                write_env(self.net_env)  # always rewritten, so turning a setting off sticks
+                bashrc_text = self.bashrc.read_text() if self.bashrc.exists() else ""
+                if self.net_env and ENV_SOURCE_LINE not in bashrc_text:
+                    with self.bashrc.open("a") as f:
+                        f.write(f"\n# ROS 2 network settings (ROS 2 Installer)\n{ENV_SOURCE_LINE}\n")
         GLib.idle_add(self.on_finished, code)
 
     def on_line(self, line):

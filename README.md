@@ -80,7 +80,7 @@ Optional:
 A step bar at the top always shows where you are and what comes next: **Check → Choose → Review → Install → Try it**.
 
 1. **System check:** the first page checks your Ubuntu version (and which ROS 2 goes with it), your processor type, free disk space, internet, whether a password helper is running, and whether ROS 2 is already installed. It also shows your computer (processor, cores, memory) and graphics card, with the NVIDIA driver version if there is one. Each item gets a ✓, or a ⚠ or ✗ with a one-line fix.
-2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop-Full (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages, update installed ROS 2 packages, and (under **Advanced**) change network settings.
+2. **Choose:** pick ROS 2 itself, then tick the categories you want. New to ROS 2? Keep **Desktop-Full (recommended)**, tick **Learn ROS 2**, and press Next. You can also pick individual packages and (under **Advanced**) change network settings.
 3. **Review:** see what you picked, how many packages that means, and the download size.
 4. **Install:** enter your password once. The progress bar fills as apt downloads and then installs, and **Show details** shows the full apt output. If Ubuntu is busy with its own updates (common on a new computer), the installer says so and waits. If something fails, you get a plain-English reason (another install running, no disk space, download interrupted) and a **Try again** button.
 5. **Try it:** a **What next?** box has an **Open terminal** button (a terminal with ROS 2 loaded), a **Run** button for your first ROS 2 program (turtlesim), and a button to the official beginner tutorials. Below it, every demo is listed, such as Gazebo, Nav2 or MoveIt 2. The ones you've installed have a working **Run** button that opens a terminal running the demo (it tells you to press <kbd>Ctrl</kbd>+<kbd>C</kbd> to stop it); the others say **Not installed** and which category to tick to get them. **Install more** takes you back to pick more.
@@ -134,10 +134,10 @@ When a single package is missing for one version (for example PlotJuggler or Car
 
 ### Updates
 
-Once ROS 2 is installed, an **Updates** group at the top of the choose page shows how many of your ROS 2 packages have updates waiting. It starts unticked; tick it to update them along with whatever else you install.
+Once ROS 2 is installed, open **☰ → Update ROS 2 packages…**. The dialog shows how many of your ROS 2 packages have updates waiting and lists them; **Update now** installs them with the usual progress bar, asking for your password once.
 The installer updates only packages you already have, with `apt-get install --only-upgrade`, so it doesn't change which packages apt marks as manually installed.
 
-Turn on **Notify me when ROS 2 updates are ready** to get a desktop notification when updates are waiting.
+In the same dialog, turn on **Notify me when ROS 2 updates are ready** to get a desktop notification when updates are waiting.
 This sets up a daily systemd user timer (`ros2-gui-installer-updates.timer`) that runs `ros2_installer.py --check-updates`.
 The check reads the package lists from Ubuntu's own daily apt refresh, so it never asks for a password.
 Turn the switch off to remove the timer. You can also run the check by hand:
@@ -203,7 +203,7 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 
 The easiest way to make one is from the installer's **☰** menu:
 
-- **Create profile…** opens the profile editor. Everything can be ticked there, even what's already installed on your computer, because nothing is installed: you're only writing a file. Give the profile a **Name** and **Description**, and **Start from** an empty profile, **this computer's setup** (the ROS 2 option, categories and hand-installed ROS 2 packages already on it), or an existing **file**. Press **Save…** when you're done; **Use it here** in the confirmation fills the same choices in for installing on this computer.
+- **Create profile…** opens the profile editor in its own window on top of the installer. Everything can be ticked there, even what's already installed on your computer, because nothing is installed: you're only writing a file. Give the profile a **Name** and **Description**, and **Start from** an empty profile, **this computer's setup** (the ROS 2 option, categories and hand-installed ROS 2 packages already on it), or an existing **file**. Press **Save…** when you're done (or **Cancel** to close it without saving); **Use it here** in the confirmation fills the same choices in for installing on this computer.
 - **Save choices as profile…** saves the current selections in the normal installer, without opening the editor.
 - **Open profile…** opens a profile file and replaces the current choices, ready to install. Categories already installed on the computer stay marked **Installed** and are listed as already there.
 

@@ -275,7 +275,7 @@ def save_log(text):
     return path
 
 
-PROFILE_KEYS = {"name", "description", "ros", "categories", "packages", "network", "terminal"}
+PROFILE_KEYS = {"name", "description", "distro", "ros", "categories", "packages", "network", "terminal"}
 PROFILE_PACKAGE = re.compile(r"^ros-(\{distro\}|humble|jazzy|lyrical)-[a-z0-9][a-z0-9-]*$")
 PROFILE_MAX_BYTES = 64 * 1024
 
@@ -295,6 +295,9 @@ def load_profile(text):
     name = data.get("name")
     if not isinstance(name, str) or not name.strip():
         raise ValueError("it needs a name:")
+    distro = data.get("distro")
+    if distro is not None and distro not in CATALOG["distros"].values():
+        raise ValueError(f"distro: must be one of {', '.join(CATALOG['distros'].values())}")
     default = next(k for k, v in CATALOG["base"]["variants"].items() if v.get("default"))
     ros = data.get("ros", default)
     if ros not in CATALOG["base"]["variants"]:
@@ -317,14 +320,19 @@ def load_profile(text):
         raise ValueError(f"network: rmw must be one of {', '.join(rmw_ids)}")
     if type(network.get("localhost", False)) is not bool or type(data.get("terminal", True)) is not bool:
         raise ValueError("network: localhost and terminal: must be true or false")
-    return {"name": name.strip(), "description": str(data.get("description", "")).strip(), "ros": ros,
+    return {"name": name.strip(), "description": str(data.get("description", "")).strip(), "distro": distro, "ros": ros,
             "categories": categories, "packages": packages, "network": network,
             "terminal": data.get("terminal", True)}
 
 
-def profile_text(name, ros, categories, packages, network, terminal):
+def profile_text(name, ros, categories, packages, network, terminal, description="", distro=None):
     """A workshop profile as YAML, written so load_profile() reads it back unchanged."""
-    data = {"name": name, "ros": ros, "categories": categories}
+    data = {"name": name}
+    if description:
+        data["description"] = description
+    if distro:
+        data["distro"] = distro  # profiles are made for one ROS 2 version
+    data.update(ros=ros, categories=categories)
     if packages:
         data["packages"] = packages
     if network:
@@ -513,22 +521,25 @@ class Installer(Adw.ApplicationWindow):
         header = Adw.HeaderBar()
         header.pack_start(self.back)
         menu = Gio.Menu()
-        menu.append("Load profile…", "win.load-profile")
+        menu.append("Create profile…", "win.create-profile")
+        menu.append("Open profile…", "win.load-profile")
         menu.append("Save choices as profile…", "win.save-profile")
-        menu.append("Save this computer's setup as profile…", "win.save-setup")
         menu.append("About ROS 2 Installer", "win.about")
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=menu, tooltip_text="Main menu"))
         header.pack_end(self.next)
+        self.editing = False  # True in Create profile mode: choices go into a file, nothing is installed
+        self.saved_profile = None  # the last profile saved from the editor, for "Use it here"
         for name, handler in [("about", self.show_about), ("load-profile", self.load_profile_dialog),
-                              ("save-profile", lambda: self.save_profile_dialog(setup=False)),
-                              ("save-setup", lambda: self.save_profile_dialog(setup=True))]:
+                              ("save-profile", self.save_profile_dialog), ("create-profile", self.create_profile),
+                              ("use-saved", lambda: self.leave_editor(self.saved_profile))]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda *_a, handler=handler: handler())
             action.set_enabled(name == "about" or bool(self.distro))  # profiles need the choose page
             self.add_action(action)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         box.append(header)
-        box.append(self.build_step_bar())
+        self.step_bar = self.build_step_bar()
+        box.append(self.step_bar)
         box.append(Gtk.Separator())
         box.append(self.stack)
         self.toasts = Adw.ToastOverlay(child=box)
@@ -596,19 +607,26 @@ class Installer(Adw.ApplicationWindow):
             label.set_label(f"{'✓' if i < current else '●' if i == current else '○'} {step}")
             a11y_label(label, f"{step}, {'done' if i < current else 'current step' if i == current else 'still to come'}")
             label.set_css_classes(["accent", "heading"] if i == current else [] if i < current else ["dim-label"])
+        self.step_bar.set_visible(not self.editing)  # editing a profile isn't an install
         self.back.set_visible(name in ("choose", "review", "packages"))
+        self.back.set_label("Cancel" if self.editing and name == "choose" else "Back")
         self.next.set_visible(name != "install")
-        self.next.set_label({"review": "Install", "done": "Close", "packages": "Done"}.get(name, "Next"))
+        self.next.set_label("Save…" if self.editing and name == "choose" else
+                            {"review": "Install", "done": "Close", "packages": "Done"}.get(name, "Next"))
         self.next.set_sensitive(not (name == "check" and self.blockers))
 
     def on_back(self):
         page = self.stack.get_visible_child_name()
+        if self.editing and page == "choose":
+            return self.leave_editor()
         self.show_page({"choose": "check", "review": "choose", "install": "review", "packages": "choose"}[page])
 
     def on_next(self):
         page = self.stack.get_visible_child_name()
         if page in ("check", "packages"):
             self.show_page("choose")
+        elif page == "choose" and self.editing:
+            self.save_profile_dialog()
         elif page == "choose":
             self.build_review_page()
         elif page == "review":
@@ -731,8 +749,9 @@ class Installer(Adw.ApplicationWindow):
 
     # ---- 2. choose ----
 
-    def build_choose_page(self):
+    def build_choose_page(self, editing=False):
         d = self.distro
+        self.editing = editing
         stale = self.stack.get_child_by_name("packages")  # "Install more": rebuild with fresh Installed marks
         if stale:
             self.stack.remove(stale)
@@ -748,11 +767,14 @@ class Installer(Adw.ApplicationWindow):
         self.profile_group = Adw.PreferencesGroup(visible=False)  # filled in by apply_profile
         page.add(self.profile_group)
         self.updates = []
-        if os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
+        if editing:
+            page.add(self.build_editor_group())
+        elif os.path.isdir(f"/opt/ros/{d}"):  # on a fresh machine "up to date" would read as "already installed"
             page.add(self.build_updates_group())
         base = Adw.PreferencesGroup(title="ROS 2 itself",
-                                    description="New to ROS 2? Keep Desktop-Full, tick Learn ROS 2 below, then press Next. "
-                                                "You can add more later.")
+                                    description="Pick what the class's computers should install." if editing else
+                                    "New to ROS 2? Keep Desktop-Full, tick Learn ROS 2 below, then press Next. "
+                                    "You can add more later.")
         page.add(base)
         self.variant_checks = {}
         first = None
@@ -790,7 +812,7 @@ class Installer(Adw.ApplicationWindow):
             complete = usable and {p for g in usable for p in expand(g["packages"], d)} <= have
             if complete:
                 row.add_suffix(Gtk.Label(label="Installed", css_classes=["dim-label"]))
-            check.set_sensitive(bool(usable) and not complete)
+            check.set_sensitive(bool(usable) and (editing or not complete))  # installed: tick only in a profile
             if complete:
                 self.cat_complete.add(c["id"])
             row.add_suffix(self.info_button(members, c["title"]))
@@ -806,7 +828,7 @@ class Installer(Adw.ApplicationWindow):
         self.bashrc = Path.home() / ".bashrc"
         self.source_line = f"source /opt/ros/{d}/setup.bash"
         already = self.bashrc.exists() and self.source_line in self.bashrc.read_text()
-        self.bashrc_check = Gtk.CheckButton(active=True, sensitive=not already)
+        self.bashrc_check = Gtk.CheckButton(active=True, sensitive=editing or not already)
         row = Adw.ActionRow(title="Load ROS 2 in every new terminal",
                             subtitle="Already set up" if already else f"Adds “{self.source_line}” to ~/.bashrc")
         row.add_prefix(self.bashrc_check)
@@ -826,6 +848,54 @@ class Installer(Adw.ApplicationWindow):
         page.add(extra)
         self.replace_page("choose", page)
 
+    def build_editor_group(self):
+        """Top of the choose page in Create profile mode: name, description and where to start from."""
+        group = Adw.PreferencesGroup(
+            title="Create a profile",
+            description=f"Pick what the class's computers should install, then press Save. Nothing is installed "
+                        f"on this computer. The profile is for ROS 2 {self.distro.title()}.")
+        self.profile_name = Gtk.Entry(placeholder_text="For example: Nav2 course", width_chars=32, valign=Gtk.Align.CENTER)
+        self.profile_desc = Gtk.Entry(placeholder_text="Shown at the top of the students' page", width_chars=32,
+                                      valign=Gtk.Align.CENTER)
+        for title, entry in [("Name", self.profile_name), ("Description", self.profile_desc)]:
+            row = Adw.ActionRow(title=title)
+            row.add_suffix(a11y_label(entry, f"Profile {title.lower()}"))
+            group.add(row)
+        row = Adw.ActionRow(title="Start from")
+        for label, start in [("Empty", self.editor_start_empty), ("This computer's setup", self.editor_start_setup),
+                             ("File…", lambda: self.pick_file(False, self.editor_open))]:
+            row.add_suffix(self.button(label, start))
+        group.add(row)
+        return group
+
+    def create_profile(self):
+        self.build_choose_page(editing=True)
+        self.show_page("choose")
+
+    def leave_editor(self, profile=None):
+        """Back to installing; with a profile, its choices are filled in to install on this computer."""
+        self.build_choose_page()
+        if profile:
+            self.apply_profile(profile)
+        self.show_page("choose")
+
+    def editor_start_empty(self):
+        default = next(k for k, v in CATALOG["base"]["variants"].items() if v.get("default"))
+        self.apply_profile({"name": self.profile_name.get_text(), "description": self.profile_desc.get_text(),
+                            "distro": None, "ros": default, "categories": [], "packages": [],
+                            "network": {"domain_id": 0, "rmw": "default", "localhost": False}, "terminal": True})
+
+    def editor_start_setup(self):
+        profile = load_profile(self.profile_from_choices("This computer", setup=True))
+        profile["name"] = self.profile_name.get_text() or profile["name"]
+        self.apply_profile(profile)
+
+    def editor_open(self, path):
+        try:
+            self.apply_profile(load_profile(fetch_profile(path)))
+        except ValueError as e:
+            self.toast(f"Couldn't open the profile: {e}")
+
     def apply_profile(self, profile):
         """Fill in the choose page from a workshop profile (a dict), or report why it couldn't load (a str).
         Students still review and approve with their password; nothing installs by itself."""
@@ -833,11 +903,13 @@ class Installer(Adw.ApplicationWindow):
             self.set_check("profile", "warn", f"Couldn't use the workshop profile: {profile}. "
                                               "You can still choose by hand.")
             return
-        if "profile" in self.check_rows:
+        if "profile" in self.check_rows and not self.editing:
             self.set_check("profile", "ok", f"{profile['name']}: your choices are filled in on the next page")
         if not self.distro:
             return
         d, notes = self.distro, []
+        if profile["distro"] and profile["distro"] != d:
+            notes.append(f"it was made for ROS 2 {profile['distro'].title()}, this computer has {d.title()}")
         self.variant_checks[profile["ros"]].set_active(True)
         for check in self.cat_checks.values():  # a profile replaces the current choices
             check.set_active(False)
@@ -849,7 +921,7 @@ class Installer(Adw.ApplicationWindow):
             check = self.cat_checks[cat]
             if check.get_sensitive():
                 check.set_active(True)
-            elif cat in self.cat_complete:
+            elif cat in self.cat_complete and not self.editing:
                 already.append(titles[cat])
             else:
                 notes.append(f"{titles[cat]} isn't available for ROS 2 {d.title()}")
@@ -860,7 +932,7 @@ class Installer(Adw.ApplicationWindow):
             avail = parse_policy(run(["apt-cache", "policy", *mine]))
             notes += [f"{p} isn't available" for p in mine if p not in avail]
             mine = [p for p in mine if p in avail]
-        have = installed(mine) if mine else set()
+        have = installed(mine) if mine and not self.editing else set()  # a profile keeps installed ones
         if have:
             already.append(f"{len(have)} of its package{'s' * (len(have) > 1)}")
         self.manual |= set(mine) - have
@@ -874,8 +946,17 @@ class Installer(Adw.ApplicationWindow):
             self.advanced.set_expanded(True)  # so students can see what the profile set
         if self.bashrc_check.get_sensitive():
             self.bashrc_check.set_active(profile["terminal"])
+        if self.editing:
+            self.profile_name.set_text(profile["name"])
+            self.profile_desc.set_text(profile["description"])
+            if notes:
+                self.toast("Not applied: " + "; ".join(notes) + ".")
+            return
         to_do = self.manual or any(c.get_active() for c in self.cat_checks.values())
-        text = " ".join(filter(None, [profile["description"], "Your choices are filled in; press Next to review."
+        description = profile["description"]
+        if description and not description.endswith((".", "!", "?")):
+            description += "."
+        text = " ".join(filter(None, [description, "Your choices are filled in; press Next to review."
                                       if to_do else "Everything in this profile is already on this computer."]))
         if already and to_do:
             text += " Already on this computer: " + ", ".join(already) + "."
@@ -898,7 +979,7 @@ class Installer(Adw.ApplicationWindow):
         yaml_files = Gtk.FileFilter(name="Workshop profiles (*.yaml)")
         yaml_files.add_pattern("*.yaml")
         yaml_files.add_pattern("*.yml")
-        title = "Save choices as profile" if save else "Load profile"
+        title = "Save profile" if save else "Open profile"
         if hasattr(Gtk, "FileDialog"):  # GTK 4.10+: Ubuntu 24.04 and later
             dialog = Gtk.FileDialog(title=title, default_filter=yaml_files)
             if save:
@@ -931,14 +1012,17 @@ class Installer(Adw.ApplicationWindow):
             try:
                 profile = load_profile(fetch_profile(path))
             except ValueError as e:
-                self.toast(f"Couldn't load the profile: {e}")
+                self.toast(f"Couldn't open the profile: {e}")
                 return
-            self.apply_profile(profile)
-            self.show_page("choose")
+            if self.editing:  # Open profile is for installing; Start from: File… edits one
+                self.leave_editor(profile)
+            else:
+                self.apply_profile(profile)
+                self.show_page("choose")
             self.toast(f"Loaded “{profile['name']}”. Check the choices, then press Next.")
         self.pick_file(False, load)
 
-    def profile_from_choices(self, name, setup=False):
+    def profile_from_choices(self, name, setup=False, description=""):
         """Profile YAML from what was picked by hand, or (setup=True) from what's installed on this computer,
         so one set-up computer can be copied to a whole class. Packages use {distro}: the file works on any version."""
         d, variants = self.distro, CATALOG["base"]["variants"]
@@ -961,19 +1045,34 @@ class Installer(Adw.ApplicationWindow):
         network = {k: v for k, v in [("domain_id", self.domain.get_value_as_int()), ("rmw", rmw),
                                       ("localhost", self.localhost.get_active())]
                    if v not in (0, "default", False)}
-        return profile_text(name, ros, categories, packages, network, self.bashrc_check.get_active())
+        return profile_text(name, ros, categories, packages, network, self.bashrc_check.get_active(), description, d)
 
-    def save_profile_dialog(self, setup):
+    def save_profile_dialog(self):
+        """Save the current choices. In Create profile mode the name and description come from the editor."""
+        name = self.profile_name.get_text().strip() if self.editing else ""
+        if self.editing and not name:
+            self.toast("Give the profile a name first.")
+            self.profile_name.grab_focus()
+            return
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "my-course"
+
         def save(path):
             path = Path(path) if Path(path).suffix in (".yaml", ".yml") else Path(path + ".yaml")
-            name = path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or "My course"
+            title = name or path.stem.replace("-", " ").replace("_", " ").strip().capitalize() or "My course"
+            text = self.profile_from_choices(title, description=self.profile_desc.get_text().strip()
+                                             if self.editing else "")
             try:
-                path.write_text(self.profile_from_choices(name, setup))
+                path.write_text(text)
             except OSError as e:
                 self.toast(f"Couldn't save the profile: {e.strerror}")
                 return
-            self.toast(f"Saved “{name}” to {path}")
-        self.pick_file(True, save, "this-computer.yaml" if setup else "my-course.yaml")
+            if self.editing:
+                self.saved_profile = load_profile(text)
+                self.toasts.add_toast(Adw.Toast(title=GLib.markup_escape_text(f"Saved “{title}” to {path}"),
+                                                button_label="Use it here", action_name="win.use-saved", timeout=8))
+            else:
+                self.toast(f"Saved “{title}” to {path}")
+        self.pick_file(True, save, f"{slug}.yaml")
 
     def on_category_toggled(self, check, cat):
         """Ticking a category also ticks the categories its sections need (Nav2 needs Simulate)."""
@@ -1200,8 +1299,8 @@ class Installer(Adw.ApplicationWindow):
         labels.get_first_child().set_label(pkg)
         labels.get_last_child().set_label(self.pkg_desc[pkg])
         check.pkg = None  # stops on_package_toggled from reacting to the set_active below
-        check.set_active(pkg in self.manual or pkg in self.pkg_installed)
-        check.set_sensitive(pkg not in self.pkg_installed)
+        check.set_active(pkg in self.manual or (pkg in self.pkg_installed and not self.editing))
+        check.set_sensitive(self.editing or pkg not in self.pkg_installed)  # installed: pick only into a profile
         badge.set_visible(pkg in self.pkg_installed)
         check.pkg = pkg
 

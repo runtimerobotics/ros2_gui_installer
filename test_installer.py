@@ -173,6 +173,14 @@ back = load_profile(saved)
 assert (back["name"], back["ros"], back["categories"], back["packages"], back["network"], back["terminal"]) == \
     ("My course", "desktop", ["learn", "mobile"], ["ros-{distro}-joy"], {"rmw": "rmw_zenoh_cpp", "domain_id": 3}, False)
 assert load_profile(profile_text("Bare", "desktop-full", [], [], {}, True))["categories"] == []
+full = load_profile(profile_text("Lab", "desktop", ["learn"], [], {}, True, "For room 4", "jazzy"))
+assert (full["description"], full["distro"]) == ("For room 4", "jazzy")
+assert load_profile("name: Old file\n")["distro"] is None  # profiles from before 0.2.3 have no distro
+try:
+    load_profile("name: x\ndistro: noetic")
+    raise AssertionError("accepted an unknown distro")
+except ValueError as e:
+    assert "distro:" in str(e)
 
 # "Individual packages" in a saved profile: hand-installed ROS 2 packages of this distro that no
 # catalog choice or ROS 2 option already brings in.

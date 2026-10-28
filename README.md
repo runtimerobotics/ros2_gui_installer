@@ -174,6 +174,7 @@ Nothing installs without them reviewing and approving it.
 ```yaml
 name: Nav2 course
 description: Simulation, TurtleBot and Nav2, ready for the navigation exercises.
+distro: jazzy                # optional: the ROS 2 version this profile is for
 ros: desktop-full            # desktop-full, desktop or ros-base
 categories:                  # learn, simulate, models, tools, sensors, mobile, arms, behavior, connect, dev
   - learn
@@ -202,10 +203,11 @@ curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/
 
 The easiest way to make one is from the installer's **☰** menu:
 
-- **Save choices as profile…** saves what you picked by hand: the ROS 2 option, the ticked categories and individual packages, plus the network and terminal settings. Use it to design a course setup.
-- **Save this computer's setup as profile…** saves what's already installed: the biggest ROS 2 option on this computer, every fully installed category, and the ROS 2 packages you installed yourself (ones a category or the ROS 2 option already brings in are left out), plus the network and terminal settings. Use it to copy a computer you've set up to a whole class.
-- **Load profile…** opens a profile file and replaces the current choices. Categories already installed on the computer stay marked **Installed** and are listed as already there.
+- **Create profile…** opens the profile editor. Everything can be ticked there, even what's already installed on your computer, because nothing is installed: you're only writing a file. Give the profile a **Name** and **Description**, and **Start from** an empty profile, **this computer's setup** (the ROS 2 option, categories and hand-installed ROS 2 packages already on it), or an existing **file**. Press **Save…** when you're done; **Use it here** in the confirmation fills the same choices in for installing on this computer.
+- **Save choices as profile…** saves the current selections in the normal installer, without opening the editor.
+- **Open profile…** opens a profile file and replaces the current choices, ready to install. Categories already installed on the computer stay marked **Installed** and are listed as already there.
 
+Profiles are made for one ROS 2 version and record it (`distro: jazzy`); opening one on a computer with a different version says so.
 Package names are saved as `ros-{distro}-…`, so the same file works on Humble, Jazzy and Lyrical.
 
 Ready-made examples are in [`profiles/`](profiles/), for example [`nav2-course.yaml`](profiles/nav2-course.yaml).

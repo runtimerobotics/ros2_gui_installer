@@ -3,7 +3,7 @@
 What changed in each release. Full notes and the `.deb` for each version are on the
 [releases page](https://github.com/runtimerobotics/ros2_gui_installer/releases).
 
-## Unreleased
+## 0.2.6 (2026-10-29)
 - The progress bar keeps moving while the installer connects to the ROS 2 server and refreshes package lists. On a fresh computer this takes a few minutes, and the bar used to look frozen.
 
 ## 0.2.5 (2026-10-28)

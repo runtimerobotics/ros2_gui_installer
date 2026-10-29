@@ -1431,7 +1431,17 @@ class Installer(Adw.ApplicationWindow):
         self.replace_page("install", page)
         self.show_page("install")
         self.installing = True
+        GLib.timeout_add(150, self.pulse_while_waiting, self.progress)
         threading.Thread(target=self.install_worker, args=(pkgs,), daemon=True).start()
+
+    def pulse_while_waiting(self, bar):
+        # Connecting to the server and "apt update" print little for minutes; keep the bar moving
+        # until apt reports real progress, so it never looks frozen.
+        if bar is not self.progress or not self.installing:
+            return False  # a retry made a new bar, or the install ended
+        if bar.get_fraction() == 0:
+            bar.pulse()
+        return True
 
     def stream(self, cmd):
         """Run cmd, feeding each output line to the log; return its exit code."""
@@ -1483,8 +1493,6 @@ class Installer(Adw.ApplicationWindow):
             if line.startswith(("##STEP Installing packages", "##STEP Updating ROS 2 packages")):
                 self.progress.set_fraction(0)  # each apt run (install, then updates) fills the bar again
                 self.saw_download = False
-        elif self.progress.get_fraction() == 0:
-            self.progress.pulse()  # e.g. "apt update", before apt reports real progress
 
     def report(self):
         buf = self.log.get_buffer()

@@ -79,6 +79,12 @@ On Ubuntu 22.04, 24.04 or 26.04 (or Linux Mint / Pop!_OS), open a terminal (<kbd
 curl -fsSL https://raw.githubusercontent.com/runtimerobotics/ros2_gui_installer/main/install.sh | bash
 ```
 
+> **`curl: command not found`?** Ubuntu 22.04 doesn't come with curl. Install it, then run the line above again:
+>
+> ```bash
+> sudo apt update && sudo apt install -y curl
+> ```
+
 The installer opens by itself. Press **Next**, tick what you want, then press **Install**.
 Later, open **ROS 2 Installer** from your app menu. More options are under [Install](#install).
 
@@ -375,6 +381,9 @@ cd ros2_gui_installer && ./ros2_installer.py
 
 When an install fails, press **Copy details** (or **Open log**) and send that text with your question.
 Every install's log is also saved in `~/.local/state/ros2-gui-installer/`.
+
+**`curl: command not found`, or the one-line install prints nothing**
+Ubuntu 22.04 doesn't come with curl. Install it with `sudo apt update && sudo apt install -y curl`, then run the one-line install again. If curl is installed but the download fails, check your internet connection, or that your network doesn't block `raw.githubusercontent.com`.
 
 **"Another program is still installing software (often Ubuntu's own updates)"**
 On a new computer, Ubuntu installs its own updates in the first minutes. The installer waits up to 15 minutes for them; if that's not enough, wait a little longer or restart the computer, then press **Try again**.

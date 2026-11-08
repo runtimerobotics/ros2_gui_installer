@@ -1,3 +1,4 @@
 dist/
 *.log
 __pycache__/
+graphify-out/
